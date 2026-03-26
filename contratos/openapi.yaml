@@ -1,0 +1,228 @@
+openapi: 3.0.3
+info:
+  title: API GasPass
+  version: 0.1.0
+  description: Contrato OpenAPI inicial para os fluxos criticos do GasPass.
+servers:
+  - url: https://api.gaspass.local
+security:
+  - bearerAuth: []
+tags:
+  - name: Autenticacao
+  - name: Carteiras
+  - name: Pagamentos
+  - name: Campanhas
+  - name: Vouchers
+paths:
+  /v1/autenticacao/login:
+    post:
+      tags: [Autenticacao]
+      summary: Autentica usuario e emite JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, senha]
+              properties:
+                email: { type: string, format: email }
+                senha: { type: string, minLength: 8 }
+      responses:
+        "200":
+          description: Autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenAutenticacao"
+  /v1/carteiras/minha:
+    get:
+      tags: [Carteiras]
+      summary: Obtem carteira e saldo derivado
+      responses:
+        "200":
+          description: Detalhes da carteira
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResumoCarteira"
+  /v1/pagamentos/recarga:
+    post:
+      tags: [Pagamentos]
+      summary: Cria intencao de pagamento para recarga
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [valor_fiat, nome_gateway]
+              properties:
+                valor_fiat: { type: number, minimum: 1 }
+                nome_gateway: { type: string, enum: [nubank, infinitepay] }
+      responses:
+        "201":
+          description: Pagamento criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pagamento"
+  /v1/webhooks/pagamentos/{gateway}:
+    post:
+      tags: [Pagamentos]
+      summary: Recebe evento de webhook do gateway
+      parameters:
+        - in: path
+          name: gateway
+          required: true
+          schema: { type: string, enum: [nubank, infinitepay] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "202":
+          description: Evento aceito para processamento
+  /v1/campanhas:
+    post:
+      tags: [Campanhas]
+      summary: Cria campanha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome]
+              properties:
+                nome: { type: string }
+                descricao: { type: string }
+      responses:
+        "201":
+          description: Campanha criada
+  /v1/campanhas/{campanha_id}/versoes/{versao_id}/simular:
+    post:
+      tags: [Campanhas]
+      summary: Executa simulacao de teste da versao da campanha
+      parameters:
+        - in: path
+          name: campanha_id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: versao_id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Resultado da simulacao
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trilha_decisao:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+                  saida:
+                    type: object
+                    additionalProperties: true
+  /v1/vouchers:
+    post:
+      tags: [Vouchers]
+      summary: Gera payload QR do voucher
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pagamento_id, tipo_combustivel, litros]
+              properties:
+                pagamento_id: { type: string, format: uuid }
+                tipo_combustivel: { type: string }
+                litros: { type: number, minimum: 0.001 }
+      responses:
+        "201":
+          description: Voucher gerado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Voucher"
+  /v1/vouchers/{voucher_id}/validar:
+    post:
+      tags: [Vouchers]
+      summary: Valida e consome voucher de forma atomica
+      parameters:
+        - in: path
+          name: voucher_id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nonce, hash_payload, assinatura_hmac]
+              properties:
+                nonce: { type: string, format: uuid }
+                hash_payload: { type: string }
+                assinatura_hmac: { type: string }
+      responses:
+        "200":
+          description: Voucher consumido
+        "409":
+          description: Voucher invalido, expirado ou ja utilizado
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    TokenAutenticacao:
+      type: object
+      required: [token_acesso, tipo_token, expira_em_segundos]
+      properties:
+        token_acesso: { type: string }
+        tipo_token: { type: string, example: Bearer }
+        expira_em_segundos: { type: integer, example: 3600 }
+    ResumoCarteira:
+      type: object
+      properties:
+        carteira_id: { type: string, format: uuid }
+        nome_token: { type: string }
+        cotacao_token: { type: number }
+        saldo_token: { type: number }
+    Pagamento:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string }
+        nome_gateway: { type: string }
+        valor_fiat: { type: number }
+        valor_token: { type: number }
+    Voucher:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nonce: { type: string, format: uuid }
+        hash_payload: { type: string }
+        assinatura_hmac: { type: string }
+        expira_em: { type: string, format: date-time }

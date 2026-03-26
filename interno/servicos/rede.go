@@ -1,0 +1,160 @@
+package servicos
+
+import (
+	"fmt"
+	"strings"
+
+	"gaspass-servidor/interno/modelos"
+	"gaspass-servidor/interno/repositorios"
+	"gaspass-servidor/utils"
+)
+
+type ServicoRede interface {
+	Listar() ([]*modelos.Rede, error)
+	BuscarPorID(id string) (*modelos.Rede, error)
+	Criar(input CriarRedeInput) (*modelos.Rede, error)
+	Editar(input EditarRedeInput) (*modelos.Rede, error)
+	Ativar(id string) (*modelos.Rede, error)
+	Desativar(id string) (*modelos.Rede, error)
+}
+
+type CriarRedeInput struct {
+	NomeFantasia     string
+	RazaoSocial      string
+	CNPJ             string
+	EmailContato     string
+	Telefone         string
+	ValorImplantacao float64
+	ValorMensalidade float64
+	PrimeiroCobranca string
+}
+
+type EditarRedeInput struct {
+	ID               string
+	NomeFantasia     string
+	RazaoSocial      string
+	CNPJ             string
+	EmailContato     string
+	Telefone         string
+	ValorImplantacao float64
+	ValorMensalidade float64
+	PrimeiroCobranca string
+}
+
+type servicoRede struct {
+	repo repositorios.RedeRepositorio
+}
+
+func NovoServicoRede(repo repositorios.RedeRepositorio) ServicoRede {
+	return &servicoRede{repo: repo}
+}
+
+func (s *servicoRede) Listar() ([]*modelos.Rede, error) {
+	return s.repo.Listar()
+}
+
+func (s *servicoRede) BuscarPorID(id string) (*modelos.Rede, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, ErrDadosInvalidos
+	}
+	return s.repo.BuscarPorID(id)
+}
+
+func (s *servicoRede) Criar(input CriarRedeInput) (*modelos.Rede, error) {
+	input.NomeFantasia = strings.TrimSpace(input.NomeFantasia)
+	input.RazaoSocial = strings.TrimSpace(input.RazaoSocial)
+	input.CNPJ = strings.TrimSpace(input.CNPJ)
+	input.EmailContato = strings.TrimSpace(input.EmailContato)
+	input.Telefone = strings.TrimSpace(input.Telefone)
+	input.PrimeiroCobranca = strings.TrimSpace(input.PrimeiroCobranca)
+
+	if input.NomeFantasia == "" || input.RazaoSocial == "" || input.CNPJ == "" || input.PrimeiroCobranca == "" {
+		return nil, ErrDadosInvalidos
+	}
+	if input.ValorImplantacao < 0 || input.ValorMensalidade <= 0 {
+		return nil, ErrDadosInvalidos
+	}
+
+	primeiraCobranca, err := utils.ParseDataISO(input.PrimeiroCobranca)
+	if err != nil {
+		return nil, fmt.Errorf("%w: primeiro_cobranca deve estar no formato YYYY-MM-DD", ErrDadosInvalidos)
+	}
+
+	rede := &modelos.Rede{
+		ID:               utils.GerarToken("rede"),
+		NomeFantasia:     input.NomeFantasia,
+		RazaoSocial:      input.RazaoSocial,
+		CNPJ:             input.CNPJ,
+		EmailContato:     input.EmailContato,
+		Telefone:         input.Telefone,
+		ValorImplantacao: input.ValorImplantacao,
+		ValorMensalidade: input.ValorMensalidade,
+		PrimeiroCobranca: primeiraCobranca,
+		DiaCobranca:      primeiraCobranca.Day(),
+		Ativa:            true,
+	}
+	if err := s.repo.Criar(rede); err != nil {
+		return nil, err
+	}
+	return rede, nil
+}
+
+func (s *servicoRede) Editar(input EditarRedeInput) (*modelos.Rede, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	input.NomeFantasia = strings.TrimSpace(input.NomeFantasia)
+	input.RazaoSocial = strings.TrimSpace(input.RazaoSocial)
+	input.CNPJ = strings.TrimSpace(input.CNPJ)
+	input.EmailContato = strings.TrimSpace(input.EmailContato)
+	input.Telefone = strings.TrimSpace(input.Telefone)
+	input.PrimeiroCobranca = strings.TrimSpace(input.PrimeiroCobranca)
+
+	if input.ID == "" || input.NomeFantasia == "" || input.RazaoSocial == "" || input.CNPJ == "" || input.PrimeiroCobranca == "" {
+		return nil, ErrDadosInvalidos
+	}
+	if input.ValorImplantacao < 0 || input.ValorMensalidade <= 0 {
+		return nil, ErrDadosInvalidos
+	}
+
+	primeiraCobranca, err := utils.ParseDataISO(input.PrimeiroCobranca)
+	if err != nil {
+		return nil, fmt.Errorf("%w: primeiro_cobranca deve estar no formato YYYY-MM-DD", ErrDadosInvalidos)
+	}
+
+	return s.repo.Atualizar(input.ID, func(r *modelos.Rede) error {
+		r.NomeFantasia = input.NomeFantasia
+		r.RazaoSocial = input.RazaoSocial
+		r.CNPJ = input.CNPJ
+		r.EmailContato = input.EmailContato
+		r.Telefone = input.Telefone
+		r.ValorImplantacao = input.ValorImplantacao
+		r.ValorMensalidade = input.ValorMensalidade
+		r.PrimeiroCobranca = primeiraCobranca
+		r.DiaCobranca = primeiraCobranca.Day()
+		return nil
+	})
+}
+
+func (s *servicoRede) Ativar(id string) (*modelos.Rede, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, ErrDadosInvalidos
+	}
+
+	return s.repo.Atualizar(id, func(r *modelos.Rede) error {
+		r.Ativa = true
+		return nil
+	})
+}
+
+func (s *servicoRede) Desativar(id string) (*modelos.Rede, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, ErrDadosInvalidos
+	}
+
+	return s.repo.Atualizar(id, func(r *modelos.Rede) error {
+		r.Ativa = false
+		return nil
+	})
+}
