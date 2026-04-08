@@ -1,6 +1,7 @@
 package servicos
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -14,6 +15,7 @@ type ServicoGestorRede interface {
 	CriarComPlano(req CriarGestorComPlanoInput) (*modelos.GestorRede, []string, error)
 	EditarComPlano(req EditarGestorComPlanoInput) (*modelos.GestorRede, []string, error)
 	Contar() (total int, ativos int, err error)
+	Login(email, senha string) (string, *modelos.UsuarioSessao, error)
 }
 
 type CriarGestorComPlanoInput struct {
@@ -38,13 +40,19 @@ type EditarGestorComPlanoInput struct {
 type servicoGestorRede struct {
 	repoGestor repositorios.GestorRedeRepositorio
 	repoRede   repositorios.RedeRepositorio
+	auth       *autenticadorToken
 }
 
-func NovoServicoGestorRede(repoGestor repositorios.GestorRedeRepositorio, repoRede repositorios.RedeRepositorio) ServicoGestorRede {
+func NovoServicoGestorRede(repoGestor repositorios.GestorRedeRepositorio, repoRede repositorios.RedeRepositorio, auth Autenticador) (ServicoGestorRede, error) {
+	authToken, ok := auth.(*autenticadorToken)
+	if !ok {
+		return nil, errors.New("autenticador invalido para servico de gestor da rede")
+	}
 	return &servicoGestorRede{
 		repoGestor: repoGestor,
 		repoRede:   repoRede,
-	}
+		auth:       authToken,
+	}, nil
 }
 
 func (s *servicoGestorRede) Listar() ([]*modelos.GestorRede, error) {
@@ -146,4 +154,34 @@ func (s *servicoGestorRede) EditarComPlano(req EditarGestorComPlanoInput) (*mode
 
 func (s *servicoGestorRede) Contar() (int, int, error) {
 	return s.repoGestor.Contar()
+}
+
+func (s *servicoGestorRede) Login(email, senha string) (string, *modelos.UsuarioSessao, error) {
+	email = strings.TrimSpace(email)
+	senha = strings.TrimSpace(senha)
+	if email == "" || senha == "" {
+		return "", nil, ErrDadosInvalidos
+	}
+
+	gestor, err := s.repoGestor.BuscarPorEmailParaLogin(email)
+	if err != nil {
+		if errors.Is(err, repositorios.ErrGestorNaoEncontrado) {
+			return "", nil, ErrCredenciais
+		}
+		return "", nil, err
+	}
+
+	if !gestor.Ativo || gestor.SenhaHash != utils.GerarHashSHA256(senha) {
+		return "", nil, ErrCredenciais
+	}
+
+	sessao := &modelos.UsuarioSessao{
+		IDUsuario:    gestor.ID,
+		NomeCompleto: gestor.Nome,
+		IDRede:       gestor.IDRede,
+		Papel:        modelos.PapelGestorRede,
+	}
+
+	token := s.auth.CriarSessao(sessao)
+	return token, sessao, nil
 }

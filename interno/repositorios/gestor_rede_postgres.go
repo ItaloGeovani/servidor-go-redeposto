@@ -176,6 +176,41 @@ RETURNING atualizado_em`
 	return gestor, nil
 }
 
+func (r *gestorRedePostgres) BuscarPorEmailParaLogin(email string) (*modelos.GestorRede, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	const query = `
+SELECT
+  u.id::text,
+  u.rede_id::text,
+  u.nome_completo,
+  u.email,
+  u.senha_hash,
+  COALESCE(u.telefone, ''),
+  u.ativo,
+  u.criado_em,
+  u.atualizado_em,
+  COALESCE(r.valor_implantacao, 0),
+  COALESCE(r.valor_mensalidade, 0),
+  r.primeiro_cobranca,
+  COALESCE(r.dia_cobranca, 0)
+FROM usuarios u
+LEFT JOIN redes r ON r.id = u.rede_id
+WHERE u.papel = 'gestor_rede'
+  AND LOWER(TRIM(u.email)) = LOWER(TRIM($1))
+LIMIT 1`
+
+	gestor, err := scanGestorComSenha(r.db.QueryRowContext(ctx, query, email))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGestorNaoEncontrado
+		}
+		return nil, err
+	}
+	return gestor, nil
+}
+
 func (r *gestorRedePostgres) Contar() (int, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -206,6 +241,33 @@ func scanGestor(s scannerGestor) (*modelos.GestorRede, error) {
 		&gestor.IDRede,
 		&gestor.Nome,
 		&gestor.Email,
+		&gestor.Telefone,
+		&gestor.Ativo,
+		&gestor.CriadoEm,
+		&gestor.AtualizadoEm,
+		&gestor.ValorImplantacao,
+		&gestor.ValorMensalidade,
+		&primeiro,
+		&gestor.DiaVencimento,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if primeiro.Valid {
+		gestor.PrimeiroVencimento = primeiro.Time
+	}
+	return &gestor, nil
+}
+
+func scanGestorComSenha(s scannerGestor) (*modelos.GestorRede, error) {
+	var gestor modelos.GestorRede
+	var primeiro sql.NullTime
+	err := s.Scan(
+		&gestor.ID,
+		&gestor.IDRede,
+		&gestor.Nome,
+		&gestor.Email,
+		&gestor.SenhaHash,
 		&gestor.Telefone,
 		&gestor.Ativo,
 		&gestor.CriadoEm,

@@ -27,6 +27,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 			"editar": "PUT /v1/admin/administradores-gerais/dev/editar",
 		},
 		"gestor_rede_dev": map[string]string{
+			"login":            "POST /v1/gestor-rede/dev/login",
 			"criar_com_plano":  "POST /v1/admin/gestores-rede/dev/criar",
 			"editar_com_plano": "PUT /v1/admin/gestores-rede/dev/editar",
 		},

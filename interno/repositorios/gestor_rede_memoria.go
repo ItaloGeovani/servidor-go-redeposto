@@ -19,6 +19,8 @@ type GestorRedeRepositorio interface {
 	Criar(gestor *modelos.GestorRede) error
 	Atualizar(id string, atualizar func(*modelos.GestorRede) error) (*modelos.GestorRede, error)
 	Contar() (total int, ativos int, err error)
+	// BuscarPorEmailParaLogin retorna o registro com SenhaHash preenchido (uso interno / autenticacao).
+	BuscarPorEmailParaLogin(email string) (*modelos.GestorRede, error)
 }
 
 type gestorRedeMemoria struct {
@@ -113,6 +115,21 @@ func (r *gestorRedeMemoria) Contar() (int, int, error) {
 		}
 	}
 	return total, ativos, nil
+}
+
+func (r *gestorRedeMemoria) BuscarPorEmailParaLogin(email string) (*modelos.GestorRede, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	id, ok := r.porMail[normalizarEmailGestor(email)]
+	if !ok {
+		return nil, ErrGestorNaoEncontrado
+	}
+	gestor, ok := r.porID[id]
+	if !ok {
+		return nil, ErrGestorNaoEncontrado
+	}
+	return clonarGestor(gestor), nil
 }
 
 func normalizarEmailGestor(email string) string {

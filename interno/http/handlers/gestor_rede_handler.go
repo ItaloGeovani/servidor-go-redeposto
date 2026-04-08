@@ -28,6 +28,11 @@ type reqEditarGestorComPlano struct {
 	ConfirmarSenha string `json:"confirmar_senha"`
 }
 
+type reqLoginGestorRede struct {
+	Email string `json:"email"`
+	Senha string `json:"senha"`
+}
+
 func (h *Handlers) ListarGestoresRedeDev(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
@@ -142,5 +147,37 @@ func (h *Handlers) EditarGestorRedeComPlanoDev(w http.ResponseWriter, r *http.Re
 		"mensagem": "gestor da rede atualizado",
 		"gestor":   gestor,
 		"cobranca": cobranca,
+	})
+}
+
+func (h *Handlers) LoginGestorRedeDev(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+
+	var req reqLoginGestorRede
+	if err := utils.DecodificarJSON(r, &req); err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, "payload invalido")
+		return
+	}
+
+	token, sessao, err := h.gestorService.Login(req.Email, req.Senha)
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, servicos.ErrCredenciais):
+			utils.ResponderErro(w, http.StatusUnauthorized, err.Error())
+		default:
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao autenticar gestor da rede")
+		}
+		return
+	}
+
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"mensagem": "login de gestor da rede realizado com sucesso",
+		"token":    token,
+		"sessao":   sessao,
 	})
 }

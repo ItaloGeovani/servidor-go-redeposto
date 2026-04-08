@@ -42,7 +42,11 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 	svcRede := servicos.NovoServicoRede(repoRede)
-	svcGestor := servicos.NovoServicoGestorRede(repoGestor, repoRede)
+	svcGestor, err := servicos.NovoServicoGestorRede(repoGestor, repoRede, autenticador)
+	if err != nil {
+		banco.Close()
+		return nil, err
+	}
 	if err := bootstrapAdminPadrao(cfg, svcAdmin); err != nil {
 		banco.Close()
 		return nil, err
