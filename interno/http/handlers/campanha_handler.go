@@ -1,0 +1,239 @@
+package handlers
+
+import (
+	"errors"
+	"log"
+	"net/http"
+	"strings"
+	"time"
+
+	"gaspass-servidor/interno/http/middlewares"
+	"gaspass-servidor/interno/modelos"
+	"gaspass-servidor/interno/repositorios"
+	"gaspass-servidor/interno/servicos"
+	"gaspass-servidor/utils"
+)
+
+type reqCriarCampanha struct {
+	IDRede                string   `json:"id_rede"`
+	Nome                  string   `json:"nome"`
+	Titulo                string   `json:"titulo"`
+	Descricao             string   `json:"descricao"`
+	ImagemURL             string   `json:"imagem_url"`
+	IDPosto               string   `json:"id_posto"`
+	VigenciaInicio        *string  `json:"vigencia_inicio"`
+	VigenciaFim           *string  `json:"vigencia_fim"`
+	Status                string   `json:"status"`
+	ValidaNoApp           *bool    `json:"valida_no_app"`
+	ValidaNoPostoFisico   *bool    `json:"valida_no_posto_fisico"`
+	ModalidadeDesconto    string   `json:"modalidade_desconto"`
+	BaseDesconto          string   `json:"base_desconto"`
+	ValorDesconto         float64  `json:"valor_desconto"`
+	ValorMinimoCompra     float64  `json:"valor_minimo_compra"`
+	MaxUsosPorCliente     *int     `json:"max_usos_por_cliente"`
+}
+
+type reqEditarCampanha struct {
+	ID                  string   `json:"id"`
+	IDRede              string   `json:"id_rede"`
+	Nome                string   `json:"nome"`
+	Titulo              string   `json:"titulo"`
+	Descricao           string   `json:"descricao"`
+	ImagemURL           string   `json:"imagem_url"`
+	IDPosto             string   `json:"id_posto"`
+	VigenciaInicio      *string  `json:"vigencia_inicio"`
+	VigenciaFim         *string  `json:"vigencia_fim"`
+	Status              string   `json:"status"`
+	ValidaNoApp         *bool    `json:"valida_no_app"`
+	ValidaNoPostoFisico *bool    `json:"valida_no_posto_fisico"`
+	ModalidadeDesconto  string   `json:"modalidade_desconto"`
+	BaseDesconto        string   `json:"base_desconto"`
+	ValorDesconto       float64  `json:"valor_desconto"`
+	ValorMinimoCompra   float64  `json:"valor_minimo_compra"`
+	MaxUsosPorCliente   *int     `json:"max_usos_por_cliente"`
+}
+
+func boolOuPadrao(v *bool, padrao bool) bool {
+	if v == nil {
+		return padrao
+	}
+	return *v
+}
+
+func (h *Handlers) ListarCampanhasRedeDev(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+
+	idRede := strings.TrimSpace(r.URL.Query().Get("id_rede"))
+	itens, err := h.campanhaService.ListarPorRedeID(idRede)
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, "informe id_rede valido")
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+		default:
+			log.Printf("listar campanhas: %v", err)
+			utils.ResponderJSON(w, http.StatusInternalServerError, map[string]string{
+				"erro":    "falha ao listar campanhas",
+				"detalhe": err.Error(),
+			})
+		}
+		return
+	}
+
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"itens": itens,
+		"total": len(itens),
+	})
+}
+
+func (h *Handlers) CriarCampanhaRedeDev(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+
+	var req reqCriarCampanha
+	if err := utils.DecodificarJSON(r, &req); err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, "payload invalido")
+		return
+	}
+
+	u := middlewares.Usuario(r.Context())
+	if u == nil || strings.TrimSpace(u.IDUsuario) == "" {
+		utils.ResponderErro(w, http.StatusUnauthorized, "sessao invalida")
+		return
+	}
+
+	vi, vf, err := parseVigencias(req.VigenciaInicio, req.VigenciaFim)
+	if err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, "vigencia_inicio e vigencia_fim devem ser ISO8601 (RFC3339)")
+		return
+	}
+
+	c, err := h.campanhaService.Criar(u.IDUsuario, servicos.CriarCampanhaInput{
+		IDRede:                req.IDRede,
+		Nome:                  req.Nome,
+		Titulo:                req.Titulo,
+		Descricao:             req.Descricao,
+		ImagemURL:             req.ImagemURL,
+		IDPosto:               req.IDPosto,
+		VigenciaInicio:        vi,
+		VigenciaFim:           vf,
+		Status:                modelos.StatusCampanha(strings.TrimSpace(req.Status)),
+		ValidaNoApp:           boolOuPadrao(req.ValidaNoApp, true),
+		ValidaNoPostoFisico:   boolOuPadrao(req.ValidaNoPostoFisico, false),
+		ModalidadeDesconto:    req.ModalidadeDesconto,
+		BaseDesconto:          req.BaseDesconto,
+		ValorDesconto:         req.ValorDesconto,
+		ValorMinimoCompra:     req.ValorMinimoCompra,
+		MaxUsosPorCliente:     req.MaxUsosPorCliente,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, "dados invalidos: canal exclusivo (app OU posto fisico), vigencias, desconto, valor minimo ou limite de usos")
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+		case errors.Is(err, repositorios.ErrPostoNaoPertenceARede):
+			utils.ResponderErro(w, http.StatusBadRequest, err.Error())
+		default:
+			log.Printf("criar campanha: %v", err)
+			utils.ResponderJSON(w, http.StatusInternalServerError, map[string]string{
+				"erro":    "falha ao criar campanha",
+				"detalhe": err.Error(),
+			})
+		}
+		return
+	}
+
+	utils.ResponderJSON(w, http.StatusCreated, map[string]any{
+		"mensagem": "campanha criada com sucesso",
+		"campanha": c,
+	})
+}
+
+func (h *Handlers) EditarCampanhaRedeDev(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+
+	var req reqEditarCampanha
+	if err := utils.DecodificarJSON(r, &req); err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, "payload invalido")
+		return
+	}
+
+	vi, vf, err := parseVigencias(req.VigenciaInicio, req.VigenciaFim)
+	if err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, "vigencia_inicio e vigencia_fim devem ser ISO8601 (RFC3339)")
+		return
+	}
+
+	err = h.campanhaService.Atualizar(servicos.AtualizarCampanhaInput{
+		ID:                  req.ID,
+		IDRede:              req.IDRede,
+		Nome:                req.Nome,
+		Titulo:              req.Titulo,
+		Descricao:           req.Descricao,
+		ImagemURL:           req.ImagemURL,
+		IDPosto:             req.IDPosto,
+		VigenciaInicio:      vi,
+		VigenciaFim:         vf,
+		Status:              modelos.StatusCampanha(strings.TrimSpace(req.Status)),
+		ValidaNoApp:         boolOuPadrao(req.ValidaNoApp, true),
+		ValidaNoPostoFisico: boolOuPadrao(req.ValidaNoPostoFisico, false),
+		ModalidadeDesconto:  req.ModalidadeDesconto,
+		BaseDesconto:        req.BaseDesconto,
+		ValorDesconto:       req.ValorDesconto,
+		ValorMinimoCompra:   req.ValorMinimoCompra,
+		MaxUsosPorCliente:   req.MaxUsosPorCliente,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, "dados invalidos")
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+		case errors.Is(err, repositorios.ErrCampanhaNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, "campanha nao encontrada")
+		case errors.Is(err, repositorios.ErrPostoNaoPertenceARede):
+			utils.ResponderErro(w, http.StatusBadRequest, err.Error())
+		default:
+			log.Printf("editar campanha: %v", err)
+			utils.ResponderJSON(w, http.StatusInternalServerError, map[string]string{
+				"erro":    "falha ao atualizar campanha",
+				"detalhe": err.Error(),
+			})
+		}
+		return
+	}
+
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"mensagem": "campanha atualizada com sucesso",
+	})
+}
+
+func parseVigencias(ini, fim *string) (*time.Time, *time.Time, error) {
+	if ini == nil || strings.TrimSpace(*ini) == "" {
+		return nil, nil, errors.New("vigencia_inicio obrigatoria")
+	}
+	if fim == nil || strings.TrimSpace(*fim) == "" {
+		return nil, nil, errors.New("vigencia_fim obrigatoria")
+	}
+	tIni, err := time.Parse(time.RFC3339, strings.TrimSpace(*ini))
+	if err != nil {
+		return nil, nil, err
+	}
+	tFim, err := time.Parse(time.RFC3339, strings.TrimSpace(*fim))
+	if err != nil {
+		return nil, nil, err
+	}
+	tIniPtr := &tIni
+	tFimPtr := &tFim
+	return tIniPtr, tFimPtr, nil
+}

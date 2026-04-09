@@ -1,0 +1,129 @@
+package handlers
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"gaspass-servidor/interno/repositorios"
+	"gaspass-servidor/interno/servicos"
+	"gaspass-servidor/utils"
+)
+
+type reqCriarUsuarioEquipe struct {
+	IDRede         string `json:"id_rede"`
+	IDPosto        string `json:"id_posto"`
+	Papel          string `json:"papel"`
+	Nome           string `json:"nome"`
+	Email          string `json:"email"`
+	Senha          string `json:"senha"`
+	ConfirmarSenha string `json:"confirmar_senha"`
+	Telefone       string `json:"telefone"`
+}
+
+func (h *Handlers) ListarUsuariosRedeDev(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+
+	q := r.URL.Query()
+	idRede := strings.TrimSpace(q.Get("id_rede"))
+
+	limite := 0
+	if v := strings.TrimSpace(q.Get("limite")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			utils.ResponderErro(w, http.StatusBadRequest, "parametro limite invalido")
+			return
+		}
+		limite = n
+	}
+
+	offset := 0
+	if v := strings.TrimSpace(q.Get("offset")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			utils.ResponderErro(w, http.StatusBadRequest, "parametro offset invalido")
+			return
+		}
+		offset = n
+	}
+
+	var papeisFiltro []string
+	if raw := strings.TrimSpace(q.Get("papeis")); raw != "" {
+		for _, p := range strings.Split(raw, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				papeisFiltro = append(papeisFiltro, p)
+			}
+		}
+	}
+
+	idPosto := strings.TrimSpace(q.Get("id_posto"))
+
+	itens, total, limiteEfetivo, offsetEfetivo, err := h.usuarioRedeService.ListarPorRedeIDPaginado(idRede, limite, offset, papeisFiltro, idPosto)
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, "informe id_rede valido")
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+		default:
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao listar usuarios da rede")
+		}
+		return
+	}
+
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"itens":  itens,
+		"total":  total,
+		"limite": limiteEfetivo,
+		"offset": offsetEfetivo,
+	})
+}
+
+func (h *Handlers) CriarUsuarioEquipeRedeDev(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+
+	var req reqCriarUsuarioEquipe
+	if err := utils.DecodificarJSON(r, &req); err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, "payload invalido")
+		return
+	}
+
+	u, err := h.usuarioRedeService.CriarUsuarioEquipe(servicos.CriarUsuarioEquipeInput{
+		IDRede:         req.IDRede,
+		IDPosto:        req.IDPosto,
+		Papel:          req.Papel,
+		Nome:           req.Nome,
+		Email:          req.Email,
+		Senha:          req.Senha,
+		ConfirmarSenha: req.ConfirmarSenha,
+		Telefone:       req.Telefone,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+		case errors.Is(err, repositorios.ErrEmailUsuarioEquipeDuplicado):
+			utils.ResponderErro(w, http.StatusConflict, err.Error())
+		case errors.Is(err, repositorios.ErrPostoNaoPertenceARede):
+			utils.ResponderErro(w, http.StatusBadRequest, err.Error())
+		default:
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao criar usuario da equipe")
+		}
+		return
+	}
+
+	utils.ResponderJSON(w, http.StatusCreated, map[string]any{
+		"mensagem": "usuario da equipe criado com sucesso",
+		"usuario":  u,
+	})
+}

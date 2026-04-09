@@ -22,6 +22,13 @@ func RegistrarPrivadas(muxPrincipal *http.ServeMux, h *handlers.Handlers, aut se
 	muxPrivada.Handle("/v1/admin/redes/dev/editar", http.HandlerFunc(h.EditarRedeDev))
 	muxPrivada.Handle("/v1/admin/redes/dev/ativar", http.HandlerFunc(h.AtivarRedeDev))
 	muxPrivada.Handle("/v1/admin/redes/dev/desativar", http.HandlerFunc(h.DesativarRedeDev))
+	muxPrivada.Handle("/v1/admin/usuarios-rede/dev/listar", http.HandlerFunc(h.ListarUsuariosRedeDev))
+	muxPrivada.Handle("/v1/admin/usuarios-rede/dev/criar-equipe", http.HandlerFunc(h.CriarUsuarioEquipeRedeDev))
+	muxPrivada.Handle("/v1/admin/postos/dev/listar", http.HandlerFunc(h.ListarPostosRedeDev))
+	muxPrivada.Handle("/v1/admin/postos/dev/criar", http.HandlerFunc(h.CriarPostoRedeDev))
+	muxPrivada.Handle("/v1/admin/campanhas/dev/listar", http.HandlerFunc(h.ListarCampanhasRedeDev))
+	muxPrivada.Handle("/v1/admin/campanhas/dev/criar", http.HandlerFunc(h.CriarCampanhaRedeDev))
+	muxPrivada.Handle("/v1/admin/campanhas/dev/editar", http.HandlerFunc(h.EditarCampanhaRedeDev))
 
 	chain := append([]middlewares.Middleware{}, mws...)
 	chain = append(chain, middlewares.ExigirAutenticacao(aut), middlewares.ExigirPapel(modelos.PapelSuperAdmin))

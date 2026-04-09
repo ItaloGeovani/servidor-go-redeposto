@@ -36,6 +36,9 @@ func Nova() (*Aplicacao, error) {
 	repoAdmin := repositorios.NovoAdministradorGeralPostgres(banco)
 	repoGestor := repositorios.NovoGestorRedePostgres(banco)
 	repoRede := repositorios.NovoRedePostgres(banco)
+	repoUsuarioRede := repositorios.NovoUsuarioRedePostgres(banco)
+	repoPosto := repositorios.NovoPostoPostgres(banco)
+	repoCampanha := repositorios.NovoCampanhaPostgres(banco)
 	svcAdmin, err := servicos.NovoServicoAdministradorGeral(repoAdmin, autenticador)
 	if err != nil {
 		banco.Close()
@@ -47,12 +50,15 @@ func Nova() (*Aplicacao, error) {
 		banco.Close()
 		return nil, err
 	}
+	svcUsuarioRede := servicos.NovoServicoUsuarioRede(repoUsuarioRede, repoRede)
+	svcPosto := servicos.NovoServicoPosto(repoPosto, repoRede)
+	svcCampanha := servicos.NovoServicoCampanha(repoCampanha, repoRede)
 	if err := bootstrapAdminPadrao(cfg, svcAdmin); err != nil {
 		banco.Close()
 		return nil, err
 	}
 
-	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede)
+	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha)
 
 	muxPrincipal := http.NewServeMux()
 	mwGlobal := []middlewares.Middleware{
