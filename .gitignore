@@ -1,2 +1,1 @@
-# Build do painel (npm run build:deploy em painel-web-react)
-assets/
+# Inclua servidor-go/assets/ no Git apos `npm run build:deploy` em painel-web-react (ou rode scripts/prepare-painel-web.sh).

@@ -17,6 +17,7 @@ type Handlers struct {
 	premioService      servicos.ServicoPremio
 	auditoriaRepo      repositorios.AuditoriaRepositorio
 	estatisticasRepo   repositorios.EstatisticasPlataformaRepositorio
+	appMobileRepo      repositorios.AppMobileConfigRepositorio
 	cfg                config.Config
 }
 
@@ -31,6 +32,7 @@ func Novos(
 	premioService servicos.ServicoPremio,
 	auditoriaRepo repositorios.AuditoriaRepositorio,
 	estatisticasRepo repositorios.EstatisticasPlataformaRepositorio,
+	appMobileRepo repositorios.AppMobileConfigRepositorio,
 	cfg config.Config,
 ) *Handlers {
 	return &Handlers{
@@ -44,6 +46,7 @@ func Novos(
 		premioService:      premioService,
 		auditoriaRepo:      auditoriaRepo,
 		estatisticasRepo:   estatisticasRepo,
+		appMobileRepo:      appMobileRepo,
 		cfg:                cfg,
 	}
 }

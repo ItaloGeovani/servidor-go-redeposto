@@ -43,6 +43,7 @@ func Nova() (*Aplicacao, error) {
 	repoPremio := repositorios.NovoPremioPostgres(banco)
 	repoAuditoria := repositorios.NovoAuditoriaPostgres(banco)
 	estatisticasPlataforma := repositorios.NovoEstatisticasPlataformaPostgres(banco)
+	repoAppMobile := repositorios.NovoAppMobileConfigPostgres(banco)
 	svcAdmin, err := servicos.NovoServicoAdministradorGeral(repoAdmin, autenticador)
 	if err != nil {
 		banco.Close()
@@ -67,7 +68,7 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 
-	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, cfg)
+	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, cfg)
 
 	muxPrincipal := http.NewServeMux()
 	mwGlobal := []middlewares.Middleware{
@@ -84,11 +85,11 @@ func Nova() (*Aplicacao, error) {
 	rotas.RegistrarGerentePostoPainel(muxPrincipal, h, autenticador, mwGlobal...)
 	rotas.RegistrarFrentistaPainel(muxPrincipal, h, autenticador, mwGlobal...)
 
-	raizPainel := estatico.EncontrarRaizPainel()
+	raizPainel := estatico.EncontrarRaizPainel(cfg.PastaPainelWeb)
 	if raizPainel != "" {
 		log.Printf("painel web estatico: %s (GET /)", raizPainel)
 	} else {
-		log.Printf("painel web: nenhuma pasta de build encontrada; apenas API (veja assets/ no servidor-go)")
+		log.Printf("painel web: nenhuma pasta com index.html (assets/, PAINEL_WEB_ASSETS ou build:deploy); raiz mostra aviso HTML")
 	}
 	handlerPrincipal := estatico.ComSPAFallback(muxPrincipal, raizPainel)
 
