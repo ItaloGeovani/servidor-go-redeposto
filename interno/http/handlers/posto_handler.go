@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -103,5 +104,49 @@ func (h *Handlers) CriarPostoRedeDev(w http.ResponseWriter, r *http.Request) {
 	utils.ResponderJSON(w, http.StatusCreated, map[string]any{
 		"mensagem": "posto criado com sucesso",
 		"posto":    p,
+	})
+}
+
+// PublicListarPostos GET /v1/public/postos?id_rede=uuid — postos da rede para o app cliente (sem auth).
+func (h *Handlers) PublicListarPostos(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+	idRede := strings.TrimSpace(r.URL.Query().Get("id_rede"))
+	if idRede == "" {
+		utils.ResponderErro(w, http.StatusBadRequest, "informe id_rede")
+		return
+	}
+	rede, err := h.redeService.BuscarPorID(idRede)
+	if err != nil {
+		if errors.Is(err, repositorios.ErrRedeNaoEncontrada) {
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+			return
+		}
+		utils.ResponderErro(w, http.StatusInternalServerError, "falha ao carregar rede")
+		return
+	}
+	if !rede.Ativa {
+		utils.ResponderErro(w, http.StatusNotFound, "rede indisponivel")
+		return
+	}
+	itens, err := h.postoService.ListarPorRedeID(idRede)
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, "informe id_rede valido")
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+		default:
+			log.Printf("public listar postos: %v", err)
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao listar postos")
+		}
+		return
+	}
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"id_rede": idRede,
+		"itens":   itens,
+		"total":   len(itens),
 	})
 }

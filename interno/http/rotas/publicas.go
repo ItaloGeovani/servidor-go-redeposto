@@ -20,4 +20,5 @@ func RegistrarPublicas(mux *http.ServeMux, h *handlers.Handlers, mws ...middlewa
 	mux.Handle("/v1/public/rede-info", middlewares.Encadear(http.HandlerFunc(h.PublicRedeInfo), mws...))
 	mux.Handle("/v1/public/premios", middlewares.Encadear(http.HandlerFunc(h.PublicListarPremios), mws...))
 	mux.Handle("/v1/public/campanhas", middlewares.Encadear(http.HandlerFunc(h.PublicListarCampanhas), mws...))
+	mux.Handle("/v1/public/postos", middlewares.Encadear(http.HandlerFunc(h.PublicListarPostos), mws...))
 }
