@@ -17,6 +17,7 @@ import (
 	"gaspass-servidor/interno/repositorios"
 	"gaspass-servidor/interno/servicos"
 	"gaspass-servidor/utils"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -110,6 +111,7 @@ func Nova() (*Aplicacao, error) {
 	}, nil
 }
 
+// testr
 func bootstrapAdminPadrao(cfg config.Config, svc servicos.ServicoAdministradorGeral) error {
 	if !cfg.AdminBootstrapAtivado {
 		return nil
