@@ -18,6 +18,7 @@ type Handlers struct {
 	auditoriaRepo      repositorios.AuditoriaRepositorio
 	estatisticasRepo   repositorios.EstatisticasPlataformaRepositorio
 	appMobileRepo      repositorios.AppMobileConfigRepositorio
+	appCardsRepo       repositorios.AppCardsRedeRepositorio
 	cfg                config.Config
 }
 
@@ -33,6 +34,7 @@ func Novos(
 	auditoriaRepo repositorios.AuditoriaRepositorio,
 	estatisticasRepo repositorios.EstatisticasPlataformaRepositorio,
 	appMobileRepo repositorios.AppMobileConfigRepositorio,
+	appCardsRepo repositorios.AppCardsRedeRepositorio,
 	cfg config.Config,
 ) *Handlers {
 	return &Handlers{
@@ -47,6 +49,7 @@ func Novos(
 		auditoriaRepo:      auditoriaRepo,
 		estatisticasRepo:   estatisticasRepo,
 		appMobileRepo:      appMobileRepo,
+		appCardsRepo:       appCardsRepo,
 		cfg:                cfg,
 	}
 }

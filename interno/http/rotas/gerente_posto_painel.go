@@ -25,6 +25,7 @@ func RegistrarGerentePostoPainel(muxPrincipal *http.ServeMux, h *handlers.Handle
 	mux.Handle("/v1/gerente-posto/dev/usuarios-rede/editar-equipe", http.HandlerFunc(h.EditarUsuarioEquipeGestorRede))
 	mux.Handle("/v1/gerente-posto/dev/relatorios/resumo", http.HandlerFunc(h.ResumoRelatoriosGestorRede))
 	mux.Handle("/v1/gerente-posto/dev/auditoria/listar", http.HandlerFunc(h.ListarAuditoriaGestorRede))
+	mux.Handle("/v1/gerente-posto/dev/app-cards", http.HandlerFunc(h.AppCardsGestorRede))
 
 	chain := append([]middlewares.Middleware{}, mws...)
 	chain = append(chain, middlewares.ExigirAutenticacao(aut), middlewares.ExigirPapel(modelos.PapelGerentePosto))

@@ -27,6 +27,7 @@ func RegistrarGestorRedePainel(muxPrincipal *http.ServeMux, h *handlers.Handlers
 	mux.Handle("/v1/gestor-rede/dev/usuarios-rede/editar-equipe", http.HandlerFunc(h.EditarUsuarioEquipeGestorRede))
 	mux.Handle("/v1/gestor-rede/dev/relatorios/resumo", http.HandlerFunc(h.ResumoRelatoriosGestorRede))
 	mux.Handle("/v1/gestor-rede/dev/auditoria/listar", http.HandlerFunc(h.ListarAuditoriaGestorRede))
+	mux.Handle("/v1/gestor-rede/dev/app-cards", http.HandlerFunc(h.AppCardsGestorRede))
 
 	chain := append([]middlewares.Middleware{}, mws...)
 	chain = append(chain, middlewares.ExigirAutenticacao(aut), middlewares.ExigirPapel(modelos.PapelGestorRede))
