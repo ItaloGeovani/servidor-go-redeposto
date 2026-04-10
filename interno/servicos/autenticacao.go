@@ -14,6 +14,7 @@ var ErrSessaoExpirada = errors.New("sessao expirada; faca login novamente")
 
 type Autenticador interface {
 	ValidarToken(token string) (*modelos.UsuarioSessao, error)
+	CriarSessao(usuario *modelos.UsuarioSessao) string
 }
 
 type autenticadorToken struct {

@@ -189,6 +189,40 @@ RETURNING
 	return &u, nil
 }
 
+// CriarClienteSelfCadastro insere cliente da rede sem posto fixo (posto_id nulo).
+func (r *usuarioRedePostgres) CriarClienteSelfCadastro(idRede, nome, email, senhaHash, telefone string) (*modelos.UsuarioVinculoRede, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	const query = `
+INSERT INTO usuarios (rede_id, posto_id, papel, nome_completo, email, senha_hash, ativo, telefone)
+VALUES ($1::uuid, NULL, 'cliente'::papel_usuario, $2, $3, $4, true, NULLIF($5, ''))
+RETURNING
+  id::text,
+  rede_id::text,
+  COALESCE(posto_id::text, ''),
+  papel::text,
+  nome_completo,
+  email,
+  COALESCE(telefone, ''),
+  ativo`
+
+	var u modelos.UsuarioVinculoRede
+	err := r.db.QueryRowContext(
+		ctx,
+		query,
+		strings.TrimSpace(idRede),
+		strings.TrimSpace(nome),
+		strings.TrimSpace(email),
+		senhaHash,
+		strings.TrimSpace(telefone),
+	).Scan(&u.ID, &u.IDRede, &u.IDPosto, &u.Papel, &u.Nome, &u.Email, &u.Telefone, &u.Ativo)
+	if err != nil {
+		return nil, mapearErroUsuarioEquipePostgres(err)
+	}
+	return &u, nil
+}
+
 func mapearErroUsuarioEquipePostgres(err error) error {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {

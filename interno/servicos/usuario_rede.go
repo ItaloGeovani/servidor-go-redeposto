@@ -21,6 +21,7 @@ type ServicoUsuarioRede interface {
 	CriarUsuarioEquipe(in CriarUsuarioEquipeInput) (*modelos.UsuarioVinculoRede, error)
 	EditarUsuarioEquipe(in EditarUsuarioEquipeInput) (*modelos.UsuarioVinculoRede, error)
 	LoginPainel(email, senha string) (string, *modelos.UsuarioSessao, error)
+	CadastrarClienteApp(in CadastroClienteAppInput) (string, *modelos.UsuarioSessao, error)
 }
 
 // CriarUsuarioEquipeInput cadastro de gerente de posto ou frentista pelo admin global.
@@ -29,6 +30,16 @@ type CriarUsuarioEquipeInput struct {
 	IDPosto        string
 	Papel          string
 	Nome           string
+	Email          string
+	Senha          string
+	ConfirmarSenha string
+	Telefone       string
+}
+
+// CadastroClienteAppInput cadastro público de cliente final (app mobile) na rede.
+type CadastroClienteAppInput struct {
+	IDRede         string
+	NomeCompleto   string
 	Email          string
 	Senha          string
 	ConfirmarSenha string
@@ -57,6 +68,7 @@ var papeisEquipePosto = map[string]struct{}{
 type usuarioRedePostgresRepo interface {
 	ListarPorRedeIDPaginado(idRede string, limite, offset int, papeisFiltro []string, idPostoFiltro string) ([]*modelos.UsuarioVinculoRede, int, error)
 	CriarUsuarioEquipe(idRede, idPosto, papel, nome, email, senhaHash, telefone string) (*modelos.UsuarioVinculoRede, error)
+	CriarClienteSelfCadastro(idRede, nome, email, senhaHash, telefone string) (*modelos.UsuarioVinculoRede, error)
 	AtualizarUsuarioEquipe(idRede, idUsuario string, nome, email, telefone string, ativo bool, papel, idPosto, senhaHashOuVazio string) (*modelos.UsuarioVinculoRede, error)
 	BuscarPorEmailParaLoginPainel(email string) (*repositorios.UsuarioPainelLogin, error)
 	PostoPertenceARede(idPosto, idRede string) (bool, error)
@@ -225,6 +237,49 @@ func (s *servicoUsuarioRede) LoginPainel(email, senha string) (string, *modelos.
 		IDRede:       u.IDRede,
 		IDPosto:      u.IDPosto,
 		Papel:        p,
+	}
+	token := s.auth.CriarSessao(sessao)
+	return token, sessao, nil
+}
+
+func (s *servicoUsuarioRede) CadastrarClienteApp(in CadastroClienteAppInput) (string, *modelos.UsuarioSessao, error) {
+	in.IDRede = strings.TrimSpace(in.IDRede)
+	in.NomeCompleto = strings.TrimSpace(in.NomeCompleto)
+	in.Email = strings.TrimSpace(in.Email)
+	in.Senha = strings.TrimSpace(in.Senha)
+	in.ConfirmarSenha = strings.TrimSpace(in.ConfirmarSenha)
+	in.Telefone = strings.TrimSpace(in.Telefone)
+
+	if in.IDRede == "" || in.NomeCompleto == "" || in.Email == "" || in.Senha == "" {
+		return "", nil, ErrDadosInvalidos
+	}
+	if in.Senha != in.ConfirmarSenha {
+		return "", nil, fmt.Errorf("%w: senha e confirmar_senha devem ser iguais", ErrDadosInvalidos)
+	}
+	if len(in.Senha) < 6 {
+		return "", nil, fmt.Errorf("%w: senha deve ter no minimo 6 caracteres", ErrDadosInvalidos)
+	}
+	if _, err := s.repoRede.BuscarPorID(in.IDRede); err != nil {
+		return "", nil, err
+	}
+
+	u, err := s.repoUsuarios.CriarClienteSelfCadastro(
+		in.IDRede,
+		in.NomeCompleto,
+		in.Email,
+		utils.GerarHashSHA256(in.Senha),
+		in.Telefone,
+	)
+	if err != nil {
+		return "", nil, err
+	}
+
+	sessao := &modelos.UsuarioSessao{
+		IDUsuario:    u.ID,
+		NomeCompleto: u.Nome,
+		IDRede:       u.IDRede,
+		IDPosto:      u.IDPosto,
+		Papel:        modelos.PapelCliente,
 	}
 	token := s.auth.CriarSessao(sessao)
 	return token, sessao, nil
