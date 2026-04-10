@@ -83,6 +83,12 @@ func (r *redeMemoria) Criar(rede *modelos.Rede) error {
 	copia := *rede
 	copia.CNPJ = cnpj
 	copia.NomeFantasia = strings.TrimSpace(rede.NomeFantasia)
+	if strings.TrimSpace(copia.MoedaVirtualNome) == "" {
+		copia.MoedaVirtualNome = "Creditos"
+	}
+	if copia.MoedaVirtualCotacao <= 0 {
+		copia.MoedaVirtualCotacao = 1
+	}
 	now := time.Now().UTC()
 	copia.CriadoEm = now
 	copia.AtualizadoEm = now

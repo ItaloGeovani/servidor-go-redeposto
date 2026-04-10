@@ -33,6 +33,12 @@ var ErrEmailUsuarioEquipeDuplicado = errors.New("email ja cadastrado nesta rede"
 // ErrPostoNaoPertenceARede quando id_posto nao e da rede informada.
 var ErrPostoNaoPertenceARede = errors.New("posto nao pertence a esta rede")
 
+// ErrUsuarioEquipeNaoEncontrado quando o usuario nao existe na rede ou nao e equipe de posto.
+var ErrUsuarioEquipeNaoEncontrado = errors.New("usuario da equipe nao encontrado nesta rede")
+
+// ErrUsuarioPainelLoginNaoEncontrado quando nao ha gerente, frentista ou cliente com o email informado.
+var ErrUsuarioPainelLoginNaoEncontrado = errors.New("usuario nao encontrado para login no painel")
+
 // SanitizarPapeisFiltro remove valores invalidos; vazio significa "todos os papeis de rede" (exceto super_admin).
 func SanitizarPapeisFiltro(papeis []string) []string {
 	var out []string
@@ -192,4 +198,187 @@ func mapearErroUsuarioEquipePostgres(err error) error {
 		return ErrEmailUsuarioEquipeDuplicado
 	}
 	return err
+}
+
+// AtualizarUsuarioEquipe atualiza gerente de posto ou frentista; senhaHash vazio mantem a senha atual.
+func (r *usuarioRedePostgres) AtualizarUsuarioEquipe(
+	idRede, idUsuario string,
+	nome, email, telefone string,
+	ativo bool,
+	papel, idPosto string,
+	senhaHashOuVazio string,
+) (*modelos.UsuarioVinculoRede, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	idRede = strings.TrimSpace(idRede)
+	idUsuario = strings.TrimSpace(idUsuario)
+	nome = strings.TrimSpace(nome)
+	email = strings.TrimSpace(email)
+	telefone = strings.TrimSpace(telefone)
+	papel = strings.TrimSpace(papel)
+	idPosto = strings.TrimSpace(idPosto)
+	senhaHashOuVazio = strings.TrimSpace(senhaHashOuVazio)
+
+	if idRede == "" || idUsuario == "" || nome == "" || email == "" || papel == "" || idPosto == "" {
+		return nil, ErrDadosInvalidosUsuarioEquipe
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var papelAtual string
+	err = tx.QueryRowContext(ctx, `
+SELECT papel::text FROM usuarios
+WHERE id = $1::uuid AND rede_id = $2::uuid
+FOR UPDATE`, idUsuario, idRede).Scan(&papelAtual)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrUsuarioEquipeNaoEncontrado
+	}
+	if err != nil {
+		return nil, err
+	}
+	if papelAtual != "gerente_posto" && papelAtual != "frentista" {
+		return nil, ErrUsuarioEquipeNaoEncontrado
+	}
+
+	var duplicado int
+	err = tx.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM usuarios
+WHERE rede_id = $1::uuid
+  AND LOWER(TRIM(email)) = LOWER(TRIM($2))
+  AND id <> $3::uuid`, idRede, email, idUsuario).Scan(&duplicado)
+	if err != nil {
+		return nil, err
+	}
+	if duplicado > 0 {
+		return nil, ErrEmailUsuarioEquipeDuplicado
+	}
+
+	ok, err := r.postoPertenceARedeTx(ctx, tx, idPosto, idRede)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrPostoNaoPertenceARede
+	}
+
+	const query = `
+UPDATE usuarios SET
+  nome_completo = $2,
+  email = $3,
+  telefone = NULLIF($4, ''),
+  ativo = $5,
+  papel = $6::papel_usuario,
+  posto_id = $7::uuid,
+  senha_hash = CASE WHEN $8 = '' THEN senha_hash ELSE $8 END,
+  atualizado_em = NOW()
+WHERE id = $1::uuid AND rede_id = $9::uuid
+RETURNING
+  id::text,
+  rede_id::text,
+  COALESCE(posto_id::text, ''),
+  papel::text,
+  nome_completo,
+  email,
+  COALESCE(telefone, ''),
+  ativo`
+
+	var u modelos.UsuarioVinculoRede
+	err = tx.QueryRowContext(
+		ctx,
+		query,
+		idUsuario,
+		nome,
+		email,
+		telefone,
+		ativo,
+		papel,
+		idPosto,
+		senhaHashOuVazio,
+		idRede,
+	).Scan(&u.ID, &u.IDRede, &u.IDPosto, &u.Papel, &u.Nome, &u.Email, &u.Telefone, &u.Ativo)
+	if err != nil {
+		return nil, mapearErroUsuarioEquipePostgres(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+// ErrDadosInvalidosUsuarioEquipe parametros obrigatorios ausentes na atualizacao.
+var ErrDadosInvalidosUsuarioEquipe = errors.New("dados invalidos para atualizar usuario da equipe")
+
+// UsuarioPainelLogin linha de usuarios (gerente, frentista, cliente) para autenticacao.
+type UsuarioPainelLogin struct {
+	ID        string
+	IDRede    string
+	IDPosto   string
+	Papel     string
+	Nome      string
+	SenhaHash string
+	Ativo     bool
+}
+
+// BuscarPorEmailParaLoginPainel localiza um usuario pelo email (papeis de posto ou cliente).
+// Se existir o mesmo email em varias redes, usa o registro mais recente ativo.
+func (r *usuarioRedePostgres) BuscarPorEmailParaLoginPainel(email string) (*UsuarioPainelLogin, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil, ErrUsuarioPainelLoginNaoEncontrado
+	}
+
+	const query = `
+SELECT
+  u.id::text,
+  u.rede_id::text,
+  COALESCE(u.posto_id::text, ''),
+  u.papel::text,
+  u.nome_completo,
+  u.senha_hash,
+  u.ativo
+FROM usuarios u
+WHERE u.papel IN ('gerente_posto', 'frentista', 'cliente')
+  AND LOWER(TRIM(u.email)) = LOWER(TRIM($1))
+ORDER BY u.ativo DESC, u.criado_em DESC
+LIMIT 1`
+
+	var row UsuarioPainelLogin
+	err := r.db.QueryRowContext(ctx, query, email).Scan(
+		&row.ID,
+		&row.IDRede,
+		&row.IDPosto,
+		&row.Papel,
+		&row.Nome,
+		&row.SenhaHash,
+		&row.Ativo,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrUsuarioPainelLoginNaoEncontrado
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (r *usuarioRedePostgres) postoPertenceARedeTx(ctx context.Context, tx *sql.Tx, idPosto, idRede string) (bool, error) {
+	var um int
+	err := tx.QueryRowContext(ctx, `
+SELECT 1 FROM postos WHERE id = $1::uuid AND rede_id = $2::uuid
+LIMIT 1`, idPosto, idRede).Scan(&um)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }

@@ -38,6 +38,12 @@ type reqMudarStatusRede struct {
 	ID string `json:"id"`
 }
 
+type reqEditarMoedaVirtualRede struct {
+	ID                  string  `json:"id"`
+	MoedaVirtualNome    string  `json:"moeda_virtual_nome"`
+	MoedaVirtualCotacao float64 `json:"moeda_virtual_cotacao"`
+}
+
 func (h *Handlers) ListarRedesDev(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
@@ -135,6 +141,41 @@ func (h *Handlers) EditarRedeDev(w http.ResponseWriter, r *http.Request) {
 
 	utils.ResponderJSON(w, http.StatusOK, map[string]any{
 		"mensagem": "rede atualizada com sucesso",
+		"rede":     rede,
+	})
+}
+
+func (h *Handlers) EditarMoedaVirtualRedeDev(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+
+	var req reqEditarMoedaVirtualRede
+	if err := utils.DecodificarJSON(r, &req); err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, fmt.Sprintf("payload invalido: %v", err))
+		return
+	}
+
+	rede, err := h.redeService.EditarMoedaVirtual(servicos.EditarMoedaVirtualRedeInput{
+		ID:                  req.ID,
+		MoedaVirtualNome:    req.MoedaVirtualNome,
+		MoedaVirtualCotacao: req.MoedaVirtualCotacao,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, "informe id, nome da moeda e cotacao maior que zero")
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, err.Error())
+		default:
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao atualizar moeda virtual")
+		}
+		return
+	}
+
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"mensagem": "moeda virtual atualizada com sucesso",
 		"rede":     rede,
 	})
 }

@@ -32,11 +32,12 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 			"editar_com_plano": "PUT /v1/admin/gestores-rede/dev/editar",
 		},
 		"redes_dev": map[string]string{
-			"listar":    "GET /v1/admin/redes/dev/listar",
-			"criar":     "POST /v1/admin/redes/dev/criar",
-			"editar":    "PUT /v1/admin/redes/dev/editar",
-			"ativar":    "PATCH /v1/admin/redes/dev/ativar",
-			"desativar": "PATCH /v1/admin/redes/dev/desativar",
+			"listar":         "GET /v1/admin/redes/dev/listar",
+			"criar":          "POST /v1/admin/redes/dev/criar",
+			"editar":         "PUT /v1/admin/redes/dev/editar",
+			"moeda_virtual":  "PATCH /v1/admin/redes/dev/moeda-virtual",
+			"ativar":         "PATCH /v1/admin/redes/dev/ativar",
+			"desativar":      "PATCH /v1/admin/redes/dev/desativar",
 		},
 		"uso": "envie Authorization: Bearer <token> nas rotas protegidas e privadas",
 	})

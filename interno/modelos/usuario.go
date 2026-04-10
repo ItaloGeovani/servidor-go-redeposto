@@ -14,5 +14,6 @@ type UsuarioSessao struct {
 	IDUsuario    string `json:"id_usuario"`
 	NomeCompleto string `json:"nome_completo"`
 	IDRede       string `json:"id_rede"`
+	IDPosto      string `json:"id_posto,omitempty"`
 	Papel        Papel  `json:"papel"`
 }

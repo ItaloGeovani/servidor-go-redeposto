@@ -35,6 +35,8 @@ SELECT
   COALESCE(valor_mensalidade, 0),
   primeiro_cobranca,
   COALESCE(dia_cobranca, 0),
+  moeda_virtual_nome,
+  moeda_virtual_cotacao::float8,
   COALESCE(ativa, true),
   criado_em,
   atualizado_em
@@ -78,6 +80,8 @@ SELECT
   COALESCE(valor_mensalidade, 0),
   primeiro_cobranca,
   COALESCE(dia_cobranca, 0),
+  moeda_virtual_nome,
+  moeda_virtual_cotacao::float8,
   COALESCE(ativa, true),
   criado_em,
   atualizado_em
@@ -164,6 +168,8 @@ SELECT
   COALESCE(valor_mensalidade, 0),
   primeiro_cobranca,
   COALESCE(dia_cobranca, 0),
+  moeda_virtual_nome,
+  moeda_virtual_cotacao::float8,
   COALESCE(ativa, true),
   criado_em,
   atualizado_em
@@ -197,6 +203,8 @@ SET
   valor_mensalidade = $10,
   primeiro_cobranca = $11,
   dia_cobranca = $12,
+  moeda_virtual_nome = $13,
+  moeda_virtual_cotacao = $14,
   atualizado_em = NOW()
 WHERE id = $1
 RETURNING atualizado_em`
@@ -221,6 +229,8 @@ RETURNING atualizado_em`
 		rede.ValorMensalidade,
 		rede.PrimeiroCobranca,
 		rede.DiaCobranca,
+		strings.TrimSpace(rede.MoedaVirtualNome),
+		rede.MoedaVirtualCotacao,
 	).Scan(&rede.AtualizadoEm)
 	if err != nil {
 		return nil, mapearErroRedePostgres(err)
@@ -251,6 +261,8 @@ func scanRede(s scannerRede) (*modelos.Rede, error) {
 		&rede.ValorMensalidade,
 		&primeiro,
 		&rede.DiaCobranca,
+		&rede.MoedaVirtualNome,
+		&rede.MoedaVirtualCotacao,
 		&rede.Ativa,
 		&rede.CriadoEm,
 		&rede.AtualizadoEm,

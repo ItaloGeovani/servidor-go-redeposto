@@ -1,15 +1,23 @@
 package handlers
 
-import "gaspass-servidor/interno/servicos"
+import (
+	"gaspass-servidor/interno/config"
+	"gaspass-servidor/interno/repositorios"
+	"gaspass-servidor/interno/servicos"
+)
 
 type Handlers struct {
-	autenticador        servicos.Autenticador
-	adminService        servicos.ServicoAdministradorGeral
-	gestorService       servicos.ServicoGestorRede
-	redeService         servicos.ServicoRede
-	usuarioRedeService  servicos.ServicoUsuarioRede
-	postoService        servicos.ServicoPosto
-	campanhaService     servicos.ServicoCampanha
+	autenticador       servicos.Autenticador
+	adminService       servicos.ServicoAdministradorGeral
+	gestorService      servicos.ServicoGestorRede
+	redeService        servicos.ServicoRede
+	usuarioRedeService servicos.ServicoUsuarioRede
+	postoService       servicos.ServicoPosto
+	campanhaService    servicos.ServicoCampanha
+	premioService      servicos.ServicoPremio
+	auditoriaRepo      repositorios.AuditoriaRepositorio
+	estatisticasRepo   repositorios.EstatisticasPlataformaRepositorio
+	cfg                config.Config
 }
 
 func Novos(
@@ -20,6 +28,10 @@ func Novos(
 	usuarioRedeService servicos.ServicoUsuarioRede,
 	postoService servicos.ServicoPosto,
 	campanhaService servicos.ServicoCampanha,
+	premioService servicos.ServicoPremio,
+	auditoriaRepo repositorios.AuditoriaRepositorio,
+	estatisticasRepo repositorios.EstatisticasPlataformaRepositorio,
+	cfg config.Config,
 ) *Handlers {
 	return &Handlers{
 		autenticador:       autenticador,
@@ -29,5 +41,9 @@ func Novos(
 		usuarioRedeService: usuarioRedeService,
 		postoService:       postoService,
 		campanhaService:    campanhaService,
+		premioService:      premioService,
+		auditoriaRepo:      auditoriaRepo,
+		estatisticasRepo:   estatisticasRepo,
+		cfg:                cfg,
 	}
 }

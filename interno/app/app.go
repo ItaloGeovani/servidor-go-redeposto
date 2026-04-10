@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gaspass-servidor/interno/config"
+	"gaspass-servidor/interno/http/estatico"
 	"gaspass-servidor/interno/http/handlers"
 	"gaspass-servidor/interno/http/middlewares"
 	"gaspass-servidor/interno/http/rotas"
@@ -39,6 +40,9 @@ func Nova() (*Aplicacao, error) {
 	repoUsuarioRede := repositorios.NovoUsuarioRedePostgres(banco)
 	repoPosto := repositorios.NovoPostoPostgres(banco)
 	repoCampanha := repositorios.NovoCampanhaPostgres(banco)
+	repoPremio := repositorios.NovoPremioPostgres(banco)
+	repoAuditoria := repositorios.NovoAuditoriaPostgres(banco)
+	estatisticasPlataforma := repositorios.NovoEstatisticasPlataformaPostgres(banco)
 	svcAdmin, err := servicos.NovoServicoAdministradorGeral(repoAdmin, autenticador)
 	if err != nil {
 		banco.Close()
@@ -50,15 +54,20 @@ func Nova() (*Aplicacao, error) {
 		banco.Close()
 		return nil, err
 	}
-	svcUsuarioRede := servicos.NovoServicoUsuarioRede(repoUsuarioRede, repoRede)
+	svcUsuarioRede, err := servicos.NovoServicoUsuarioRede(repoUsuarioRede, repoRede, autenticador)
+	if err != nil {
+		banco.Close()
+		return nil, err
+	}
 	svcPosto := servicos.NovoServicoPosto(repoPosto, repoRede)
 	svcCampanha := servicos.NovoServicoCampanha(repoCampanha, repoRede)
+	svcPremio := servicos.NovoServicoPremio(repoPremio, repoRede)
 	if err := bootstrapAdminPadrao(cfg, svcAdmin); err != nil {
 		banco.Close()
 		return nil, err
 	}
 
-	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha)
+	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, cfg)
 
 	muxPrincipal := http.NewServeMux()
 	mwGlobal := []middlewares.Middleware{
@@ -71,10 +80,21 @@ func Nova() (*Aplicacao, error) {
 	rotas.RegistrarPublicas(muxPrincipal, h, mwGlobal...)
 	rotas.RegistrarProtegidas(muxPrincipal, h, autenticador, mwGlobal...)
 	rotas.RegistrarPrivadas(muxPrincipal, h, autenticador, mwGlobal...)
+	rotas.RegistrarGestorRedePainel(muxPrincipal, h, autenticador, mwGlobal...)
+	rotas.RegistrarGerentePostoPainel(muxPrincipal, h, autenticador, mwGlobal...)
+	rotas.RegistrarFrentistaPainel(muxPrincipal, h, autenticador, mwGlobal...)
+
+	raizPainel := estatico.EncontrarRaizPainel()
+	if raizPainel != "" {
+		log.Printf("painel web estatico: %s (GET /)", raizPainel)
+	} else {
+		log.Printf("painel web: nenhuma pasta de build encontrada; apenas API (veja assets/ no servidor-go)")
+	}
+	handlerPrincipal := estatico.ComSPAFallback(muxPrincipal, raizPainel)
 
 	servidor := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.PortaHTTP),
-		Handler:           muxPrincipal,
+		Handler:           handlerPrincipal,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      20 * time.Second,

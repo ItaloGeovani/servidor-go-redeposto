@@ -2,6 +2,7 @@ package servicos
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"gaspass-servidor/interno/modelos"
@@ -14,6 +15,7 @@ type ServicoRede interface {
 	BuscarPorID(id string) (*modelos.Rede, error)
 	Criar(input CriarRedeInput) (*modelos.Rede, error)
 	Editar(input EditarRedeInput) (*modelos.Rede, error)
+	EditarMoedaVirtual(input EditarMoedaVirtualRedeInput) (*modelos.Rede, error)
 	Ativar(id string) (*modelos.Rede, error)
 	Desativar(id string) (*modelos.Rede, error)
 }
@@ -39,6 +41,12 @@ type EditarRedeInput struct {
 	ValorImplantacao float64
 	ValorMensalidade float64
 	PrimeiroCobranca string
+}
+
+type EditarMoedaVirtualRedeInput struct {
+	ID                  string
+	MoedaVirtualNome    string
+	MoedaVirtualCotacao float64
 }
 
 type servicoRede struct {
@@ -131,6 +139,22 @@ func (s *servicoRede) Editar(input EditarRedeInput) (*modelos.Rede, error) {
 		r.ValorMensalidade = input.ValorMensalidade
 		r.PrimeiroCobranca = primeiraCobranca
 		r.DiaCobranca = primeiraCobranca.Day()
+		return nil
+	})
+}
+
+func (s *servicoRede) EditarMoedaVirtual(input EditarMoedaVirtualRedeInput) (*modelos.Rede, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	input.MoedaVirtualNome = strings.TrimSpace(input.MoedaVirtualNome)
+	if input.ID == "" || input.MoedaVirtualNome == "" {
+		return nil, ErrDadosInvalidos
+	}
+	if input.MoedaVirtualCotacao <= 0 || math.IsNaN(input.MoedaVirtualCotacao) || math.IsInf(input.MoedaVirtualCotacao, 0) {
+		return nil, ErrDadosInvalidos
+	}
+	return s.repo.Atualizar(input.ID, func(r *modelos.Rede) error {
+		r.MoedaVirtualNome = input.MoedaVirtualNome
+		r.MoedaVirtualCotacao = input.MoedaVirtualCotacao
 		return nil
 	})
 }
