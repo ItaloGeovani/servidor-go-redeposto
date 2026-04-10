@@ -237,3 +237,75 @@ func parseVigencias(ini, fim *string) (*time.Time, *time.Time, error) {
 	tFimPtr := &tFim
 	return tIniPtr, tFimPtr, nil
 }
+
+// PublicListarCampanhas GET /v1/public/campanhas?id_rede=uuid — campanhas ativas para o app cliente (sem auth).
+func (h *Handlers) PublicListarCampanhas(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+	idRede := strings.TrimSpace(r.URL.Query().Get("id_rede"))
+	if idRede == "" {
+		utils.ResponderErro(w, http.StatusBadRequest, "informe id_rede")
+		return
+	}
+	rede, err := h.redeService.BuscarPorID(idRede)
+	if err != nil {
+		if errors.Is(err, repositorios.ErrRedeNaoEncontrada) {
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+			return
+		}
+		utils.ResponderErro(w, http.StatusInternalServerError, "falha ao carregar rede")
+		return
+	}
+	if !rede.Ativa {
+		utils.ResponderErro(w, http.StatusNotFound, "rede indisponivel")
+		return
+	}
+	itens, err := h.campanhaService.ListarPorRedeID(idRede)
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, "informe id_rede valido")
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+		default:
+			log.Printf("public listar campanhas: %v", err)
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao listar campanhas")
+		}
+		return
+	}
+	agora := time.Now()
+	visiveis := filtrarCampanhasPublicas(itens, agora)
+	publicos := make([]*modelos.Campanha, 0, len(visiveis))
+	for _, c := range visiveis {
+		cp := *c
+		cp.CriadoPor = ""
+		publicos = append(publicos, &cp)
+	}
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"id_rede": idRede,
+		"itens":   publicos,
+		"total":   len(publicos),
+	})
+}
+
+func filtrarCampanhasPublicas(itens []*modelos.Campanha, agora time.Time) []*modelos.Campanha {
+	out := make([]*modelos.Campanha, 0, len(itens))
+	for _, c := range itens {
+		if c == nil || c.Status != modelos.StatusCampanhaAtiva {
+			continue
+		}
+		if !c.ValidaNoApp {
+			continue
+		}
+		if c.VigenciaInicio != nil && agora.Before(*c.VigenciaInicio) {
+			continue
+		}
+		if c.VigenciaFim != nil && agora.After(*c.VigenciaFim) {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
