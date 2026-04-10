@@ -30,6 +30,9 @@ var papeisRedePermitidos = map[string]struct{}{
 // ErrEmailUsuarioEquipeDuplicado quando ja existe usuario com o mesmo email na rede.
 var ErrEmailUsuarioEquipeDuplicado = errors.New("email ja cadastrado nesta rede")
 
+// ErrCPFJaCadastradoNaRede quando ja existe usuario com o mesmo CPF na rede.
+var ErrCPFJaCadastradoNaRede = errors.New("cpf ja cadastrado nesta rede")
+
 // ErrPostoNaoPertenceARede quando id_posto nao e da rede informada.
 var ErrPostoNaoPertenceARede = errors.New("posto nao pertence a esta rede")
 
@@ -190,13 +193,13 @@ RETURNING
 }
 
 // CriarClienteSelfCadastro insere cliente da rede sem posto fixo (posto_id nulo).
-func (r *usuarioRedePostgres) CriarClienteSelfCadastro(idRede, nome, email, senhaHash, telefone string) (*modelos.UsuarioVinculoRede, error) {
+func (r *usuarioRedePostgres) CriarClienteSelfCadastro(idRede, nome, email, senhaHash, telefone, cpf string) (*modelos.UsuarioVinculoRede, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	const query = `
-INSERT INTO usuarios (rede_id, posto_id, papel, nome_completo, email, senha_hash, ativo, telefone)
-VALUES ($1::uuid, NULL, 'cliente'::papel_usuario, $2, $3, $4, true, NULLIF($5, ''))
+INSERT INTO usuarios (rede_id, posto_id, papel, nome_completo, email, senha_hash, ativo, telefone, cpf)
+VALUES ($1::uuid, NULL, 'cliente'::papel_usuario, $2, $3, $4, true, NULLIF($5, ''), NULLIF($6, ''))
 RETURNING
   id::text,
   rede_id::text,
@@ -216,6 +219,7 @@ RETURNING
 		strings.TrimSpace(email),
 		senhaHash,
 		strings.TrimSpace(telefone),
+		strings.TrimSpace(cpf),
 	).Scan(&u.ID, &u.IDRede, &u.IDPosto, &u.Papel, &u.Nome, &u.Email, &u.Telefone, &u.Ativo)
 	if err != nil {
 		return nil, mapearErroUsuarioEquipePostgres(err)
@@ -229,6 +233,9 @@ func mapearErroUsuarioEquipePostgres(err error) error {
 		return err
 	}
 	if pgErr.Code == "23505" {
+		if strings.Contains(strings.ToLower(pgErr.ConstraintName), "cpf") {
+			return ErrCPFJaCadastradoNaRede
+		}
 		return ErrEmailUsuarioEquipeDuplicado
 	}
 	return err

@@ -16,6 +16,7 @@ type reqCadastroClienteApp struct {
 	Senha          string `json:"senha"`
 	ConfirmarSenha string `json:"confirmar_senha"`
 	Telefone       string `json:"telefone"`
+	CPF            string `json:"cpf"`
 }
 
 // PublicCadastroClienteApp POST /v1/public/clientes/cadastro — cadastro de cliente no app (sem auth).
@@ -38,6 +39,7 @@ func (h *Handlers) PublicCadastroClienteApp(w http.ResponseWriter, r *http.Reque
 		Senha:          req.Senha,
 		ConfirmarSenha: req.ConfirmarSenha,
 		Telefone:       req.Telefone,
+		CPF:            req.CPF,
 	})
 	if err != nil {
 		switch {
@@ -45,6 +47,8 @@ func (h *Handlers) PublicCadastroClienteApp(w http.ResponseWriter, r *http.Reque
 			utils.ResponderErro(w, http.StatusBadRequest, err.Error())
 		case errors.Is(err, repositorios.ErrEmailUsuarioEquipeDuplicado):
 			utils.ResponderErro(w, http.StatusConflict, "email ja cadastrado nesta rede")
+		case errors.Is(err, repositorios.ErrCPFJaCadastradoNaRede):
+			utils.ResponderErro(w, http.StatusConflict, "cpf ja cadastrado nesta rede")
 		default:
 			utils.ResponderErro(w, http.StatusInternalServerError, "nao foi possivel concluir o cadastro")
 		}

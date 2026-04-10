@@ -44,6 +44,7 @@ type CadastroClienteAppInput struct {
 	Senha          string
 	ConfirmarSenha string
 	Telefone       string
+	CPF            string
 }
 
 // EditarUsuarioEquipeInput atualizacao de gerente ou frentista; senhas vazias mantem a senha atual.
@@ -68,7 +69,7 @@ var papeisEquipePosto = map[string]struct{}{
 type usuarioRedePostgresRepo interface {
 	ListarPorRedeIDPaginado(idRede string, limite, offset int, papeisFiltro []string, idPostoFiltro string) ([]*modelos.UsuarioVinculoRede, int, error)
 	CriarUsuarioEquipe(idRede, idPosto, papel, nome, email, senhaHash, telefone string) (*modelos.UsuarioVinculoRede, error)
-	CriarClienteSelfCadastro(idRede, nome, email, senhaHash, telefone string) (*modelos.UsuarioVinculoRede, error)
+	CriarClienteSelfCadastro(idRede, nome, email, senhaHash, telefone, cpf string) (*modelos.UsuarioVinculoRede, error)
 	AtualizarUsuarioEquipe(idRede, idUsuario string, nome, email, telefone string, ativo bool, papel, idPosto, senhaHashOuVazio string) (*modelos.UsuarioVinculoRede, error)
 	BuscarPorEmailParaLoginPainel(email string) (*repositorios.UsuarioPainelLogin, error)
 	PostoPertenceARede(idPosto, idRede string) (bool, error)
@@ -249,9 +250,16 @@ func (s *servicoUsuarioRede) CadastrarClienteApp(in CadastroClienteAppInput) (st
 	in.Senha = strings.TrimSpace(in.Senha)
 	in.ConfirmarSenha = strings.TrimSpace(in.ConfirmarSenha)
 	in.Telefone = strings.TrimSpace(in.Telefone)
+	in.CPF = utils.SomenteDigitosCPF(in.CPF)
 
 	if in.IDRede == "" || in.NomeCompleto == "" || in.Email == "" || in.Senha == "" {
 		return "", nil, ErrDadosInvalidos
+	}
+	if in.CPF == "" {
+		return "", nil, fmt.Errorf("%w: cpf e obrigatorio", ErrDadosInvalidos)
+	}
+	if !utils.ValidarCPF(in.CPF) {
+		return "", nil, fmt.Errorf("%w: cpf invalido", ErrDadosInvalidos)
 	}
 	if in.Senha != in.ConfirmarSenha {
 		return "", nil, fmt.Errorf("%w: senha e confirmar_senha devem ser iguais", ErrDadosInvalidos)
@@ -269,6 +277,7 @@ func (s *servicoUsuarioRede) CadastrarClienteApp(in CadastroClienteAppInput) (st
 		in.Email,
 		utils.GerarHashSHA256(in.Senha),
 		in.Telefone,
+		in.CPF,
 	)
 	if err != nil {
 		return "", nil, err
