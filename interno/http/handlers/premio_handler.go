@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gaspass-servidor/interno/http/middlewares"
+	"gaspass-servidor/interno/modelos"
 	"gaspass-servidor/interno/repositorios"
 	"gaspass-servidor/interno/servicos"
 	"gaspass-servidor/utils"
@@ -191,4 +192,71 @@ func (h *Handlers) EditarPremioRedeDev(w http.ResponseWriter, r *http.Request) {
 	utils.ResponderJSON(w, http.StatusOK, map[string]any{
 		"mensagem": "premio atualizado com sucesso",
 	})
+}
+
+// PublicListarPremios GET /v1/public/premios?id_rede=uuid — catálogo para o app cliente (sem auth):
+// prêmios ativos, dentro da vigência e com estoque (se houver controle de quantidade).
+func (h *Handlers) PublicListarPremios(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+	idRede := strings.TrimSpace(r.URL.Query().Get("id_rede"))
+	if idRede == "" {
+		utils.ResponderErro(w, http.StatusBadRequest, "informe id_rede")
+		return
+	}
+	rede, err := h.redeService.BuscarPorID(idRede)
+	if err != nil {
+		if errors.Is(err, repositorios.ErrRedeNaoEncontrada) {
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+			return
+		}
+		utils.ResponderErro(w, http.StatusInternalServerError, "falha ao carregar rede")
+		return
+	}
+	if !rede.Ativa {
+		utils.ResponderErro(w, http.StatusNotFound, "rede indisponivel")
+		return
+	}
+	itens, err := h.premioService.ListarPorRedeID(idRede)
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, "informe id_rede valido")
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+		default:
+			log.Printf("public listar premios: %v", err)
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao listar premios")
+		}
+		return
+	}
+	agora := time.Now()
+	visiveis := filtrarPremiosPublicos(itens, agora)
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"id_rede": idRede,
+		"itens":   visiveis,
+		"total":   len(visiveis),
+	})
+}
+
+func filtrarPremiosPublicos(itens []*modelos.Premio, agora time.Time) []*modelos.Premio {
+	out := make([]*modelos.Premio, 0, len(itens))
+	for _, p := range itens {
+		if p == nil || !p.Ativo {
+			continue
+		}
+		if agora.Before(p.VigenciaInicio) {
+			continue
+		}
+		if p.VigenciaFim != nil && agora.After(*p.VigenciaFim) {
+			continue
+		}
+		if p.QuantidadeDisponivel != nil && *p.QuantidadeDisponivel <= 0 {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
