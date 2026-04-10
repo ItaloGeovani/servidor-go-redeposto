@@ -22,6 +22,7 @@ type ServicoUsuarioRede interface {
 	EditarUsuarioEquipe(in EditarUsuarioEquipeInput) (*modelos.UsuarioVinculoRede, error)
 	LoginPainel(email, senha string) (string, *modelos.UsuarioSessao, error)
 	CadastrarClienteApp(in CadastroClienteAppInput) (string, *modelos.UsuarioSessao, error)
+	ExcluirContaClienteApp(idUsuario, idRede string) error
 }
 
 // CriarUsuarioEquipeInput cadastro de gerente de posto ou frentista pelo admin global.
@@ -70,6 +71,7 @@ type usuarioRedePostgresRepo interface {
 	ListarPorRedeIDPaginado(idRede string, limite, offset int, papeisFiltro []string, idPostoFiltro string) ([]*modelos.UsuarioVinculoRede, int, error)
 	CriarUsuarioEquipe(idRede, idPosto, papel, nome, email, senhaHash, telefone string) (*modelos.UsuarioVinculoRede, error)
 	CriarClienteSelfCadastro(idRede, nome, email, senhaHash, telefone, cpf string) (*modelos.UsuarioVinculoRede, error)
+	ExcluirContaClientePorID(idUsuario, idRede string) error
 	AtualizarUsuarioEquipe(idRede, idUsuario string, nome, email, telefone string, ativo bool, papel, idPosto, senhaHashOuVazio string) (*modelos.UsuarioVinculoRede, error)
 	BuscarPorEmailParaLoginPainel(email string) (*repositorios.UsuarioPainelLogin, error)
 	PostoPertenceARede(idPosto, idRede string) (bool, error)
@@ -292,4 +294,13 @@ func (s *servicoUsuarioRede) CadastrarClienteApp(in CadastroClienteAppInput) (st
 	}
 	token := s.auth.CriarSessao(sessao)
 	return token, sessao, nil
+}
+
+func (s *servicoUsuarioRede) ExcluirContaClienteApp(idUsuario, idRede string) error {
+	idUsuario = strings.TrimSpace(idUsuario)
+	idRede = strings.TrimSpace(idRede)
+	if idUsuario == "" || idRede == "" {
+		return ErrDadosInvalidos
+	}
+	return s.repoUsuarios.ExcluirContaClientePorID(idUsuario, idRede)
 }

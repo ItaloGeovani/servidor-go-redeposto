@@ -51,6 +51,11 @@ func ExigirPapel(papel modelos.Papel) Middleware {
 	}
 }
 
+// BearerToken extrai o token do cabecalho Authorization: Bearer <token>.
+func BearerToken(r *http.Request) string {
+	return extrairBearer(r.Header.Get("Authorization"))
+}
+
 func extrairBearer(cabecalho string) string {
 	cabecalho = strings.TrimSpace(cabecalho)
 	if cabecalho == "" {

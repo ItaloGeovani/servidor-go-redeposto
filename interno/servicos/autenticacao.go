@@ -15,6 +15,7 @@ var ErrSessaoExpirada = errors.New("sessao expirada; faca login novamente")
 type Autenticador interface {
 	ValidarToken(token string) (*modelos.UsuarioSessao, error)
 	CriarSessao(usuario *modelos.UsuarioSessao) string
+	RevogarToken(token string)
 }
 
 type autenticadorToken struct {
@@ -82,4 +83,14 @@ func (a *autenticadorToken) CriarSessao(usuario *modelos.UsuarioSessao) string {
 	a.sessoes[token] = &copia
 	a.mu.Unlock()
 	return token
+}
+
+func (a *autenticadorToken) RevogarToken(token string) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return
+	}
+	a.mu.Lock()
+	delete(a.sessoes, token)
+	a.mu.Unlock()
 }

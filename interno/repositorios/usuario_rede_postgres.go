@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gaspass-servidor/interno/modelos"
+	"gaspass-servidor/utils"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -32,6 +33,9 @@ var ErrEmailUsuarioEquipeDuplicado = errors.New("email ja cadastrado nesta rede"
 
 // ErrCPFJaCadastradoNaRede quando ja existe usuario com o mesmo CPF na rede.
 var ErrCPFJaCadastradoNaRede = errors.New("cpf ja cadastrado nesta rede")
+
+// ErrContaClienteExclusaoNaoAplicada quando o usuario nao e cliente ou nao existe na rede.
+var ErrContaClienteExclusaoNaoAplicada = errors.New("conta nao encontrada ou nao e cliente")
 
 // ErrPostoNaoPertenceARede quando id_posto nao e da rede informada.
 var ErrPostoNaoPertenceARede = errors.New("posto nao pertence a esta rede")
@@ -225,6 +229,45 @@ RETURNING
 		return nil, mapearErroUsuarioEquipePostgres(err)
 	}
 	return &u, nil
+}
+
+// ExcluirContaClientePorID desativa e anonimiza dados pessoais (LGPD / lojas de app).
+func (r *usuarioRedePostgres) ExcluirContaClientePorID(idUsuario, idRede string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	idUsuario = strings.TrimSpace(idUsuario)
+	idRede = strings.TrimSpace(idRede)
+	if idUsuario == "" || idRede == "" {
+		return errors.New("ids invalidos")
+	}
+
+	emailAnon := fmt.Sprintf("deleted_%s@deleted.local", idUsuario)
+	senhaHash := utils.GerarHashSHA256(utils.GerarToken("del"))
+
+	const q = `
+UPDATE usuarios SET
+  ativo = false,
+  nome_completo = 'Conta removida',
+  email = $1,
+  senha_hash = $2,
+  telefone = NULL,
+  cpf = NULL,
+  atualizado_em = NOW()
+WHERE id = $3::uuid AND rede_id = $4::uuid AND papel = 'cliente'::papel_usuario`
+
+	res, err := r.db.ExecContext(ctx, q, emailAnon, senhaHash, idUsuario, idRede)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return ErrContaClienteExclusaoNaoAplicada
+	}
+	return nil
 }
 
 func mapearErroUsuarioEquipePostgres(err error) error {
