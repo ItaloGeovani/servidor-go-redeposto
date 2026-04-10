@@ -13,11 +13,11 @@ import (
 
 type reqSalvarAppCards struct {
 	Cards []struct {
-		Slot       int    `json:"slot"`
-		Titulo     string `json:"titulo"`
-		ImagemURL  string `json:"imagem_url"`
-		LinkURL    string `json:"link_url"`
-		Ativo      bool   `json:"ativo"`
+		Slot      int    `json:"slot"`
+		Titulo    string `json:"titulo"`
+		ImagemURL string `json:"imagem_url"`
+		LinkURL   string `json:"link_url"`
+		Ativo     bool   `json:"ativo"`
 	} `json:"cards"`
 }
 
@@ -178,4 +178,36 @@ func filtrarCardsPublicos(itens []*modelos.AppCardRede) []*modelos.AppCardRede {
 		out = append(out, c)
 	}
 	return out
+}
+
+// PublicRedeInfo GET /v1/public/rede-info?id_rede=uuid — nome fantasia e moeda virtual (app cliente, sem auth).
+func (h *Handlers) PublicRedeInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+	idRede := strings.TrimSpace(r.URL.Query().Get("id_rede"))
+	if idRede == "" {
+		utils.ResponderErro(w, http.StatusBadRequest, "informe id_rede")
+		return
+	}
+	rede, err := h.redeService.BuscarPorID(idRede)
+	if err != nil {
+		if errors.Is(err, repositorios.ErrRedeNaoEncontrada) {
+			utils.ResponderErro(w, http.StatusNotFound, "rede nao encontrada")
+			return
+		}
+		utils.ResponderErro(w, http.StatusInternalServerError, "falha ao carregar rede")
+		return
+	}
+	if !rede.Ativa {
+		utils.ResponderErro(w, http.StatusNotFound, "rede indisponivel")
+		return
+	}
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"id_rede":               idRede,
+		"nome_fantasia":         strings.TrimSpace(rede.NomeFantasia),
+		"moeda_virtual_nome":    strings.TrimSpace(rede.MoedaVirtualNome),
+		"moeda_virtual_cotacao": rede.MoedaVirtualCotacao,
+	})
 }
