@@ -12,6 +12,7 @@ func RegistrarProtegidas(muxPrincipal *http.ServeMux, h *handlers.Handlers, aut 
 	muxProtegida := http.NewServeMux()
 	muxProtegida.Handle("/v1/eu/perfil", http.HandlerFunc(h.PerfilLogado))
 	muxProtegida.Handle("/v1/eu/conta", http.HandlerFunc(h.ExcluirContaClienteApp))
+	muxProtegida.Handle("/v1/eu/pagamentos/mercadopago/pix", http.HandlerFunc(h.PostClienteMercadoPagoPix))
 
 	chain := append([]middlewares.Middleware{}, mws...)
 	chain = append(chain, middlewares.ExigirAutenticacao(aut))

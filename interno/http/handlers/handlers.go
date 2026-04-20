@@ -19,6 +19,7 @@ type Handlers struct {
 	estatisticasRepo   repositorios.EstatisticasPlataformaRepositorio
 	appMobileRepo      repositorios.AppMobileConfigRepositorio
 	appCardsRepo       repositorios.AppCardsRedeRepositorio
+	mpGatewayRepo      repositorios.MercadoPagoGatewayRepositorio
 	cfg                config.Config
 }
 
@@ -35,6 +36,7 @@ func Novos(
 	estatisticasRepo repositorios.EstatisticasPlataformaRepositorio,
 	appMobileRepo repositorios.AppMobileConfigRepositorio,
 	appCardsRepo repositorios.AppCardsRedeRepositorio,
+	mpGatewayRepo repositorios.MercadoPagoGatewayRepositorio,
 	cfg config.Config,
 ) *Handlers {
 	return &Handlers{
@@ -50,6 +52,7 @@ func Novos(
 		estatisticasRepo:   estatisticasRepo,
 		appMobileRepo:      appMobileRepo,
 		appCardsRepo:       appCardsRepo,
+		mpGatewayRepo:      mpGatewayRepo,
 		cfg:                cfg,
 	}
 }

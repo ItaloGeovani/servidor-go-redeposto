@@ -13,6 +13,8 @@ type Config struct {
 	PortaHTTP      int
 	// PastaPainelWeb: absoluta ou relativa com index.html do painel (PAINEL_WEB_ASSETS). Vazio = auto.
 	PastaPainelWeb string
+	// PublicBaseURL: URL base pública (https://api.seudominio.com) para montar webhook Mercado Pago e notification_url do PIX.
+	PublicBaseURL string
 	TokenPadraoAPI        string
 	AdminNomePadrao       string
 	AdminEmailPadrao      string
@@ -32,6 +34,7 @@ func Carregar() Config {
 		AdminSenhaPadrao:      utils.ObterEnv("ADMIN_SENHA_PADRAO", "123456"),
 		AdminBootstrapAtivado: utils.ObterEnv("ADMIN_BOOTSTRAP_ATIVADO", "true") == "true",
 		CORSOrigemPermitida:   utils.ObterEnv("CORS_ORIGEM_PERMITIDA", "http://localhost:5173"),
+		PublicBaseURL:         strings.TrimRight(strings.TrimSpace(utils.ObterEnv("PUBLIC_BASE_URL", "")), "/"),
 	}
 }
 

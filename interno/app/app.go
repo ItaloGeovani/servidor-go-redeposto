@@ -46,6 +46,7 @@ func Nova() (*Aplicacao, error) {
 	estatisticasPlataforma := repositorios.NovoEstatisticasPlataformaPostgres(banco)
 	repoAppMobile := repositorios.NovoAppMobileConfigPostgres(banco)
 	repoAppCards := repositorios.NovoAppCardsRedePostgres(banco)
+	repoMercadoPagoGateway := repositorios.NovoMercadoPagoGatewayPostgres(banco)
 	svcAdmin, err := servicos.NovoServicoAdministradorGeral(repoAdmin, autenticador)
 	if err != nil {
 		banco.Close()
@@ -70,7 +71,7 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 
-	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, cfg)
+	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, cfg)
 
 	muxPrincipal := http.NewServeMux()
 	mwGlobal := []middlewares.Middleware{
