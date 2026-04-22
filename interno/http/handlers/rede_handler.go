@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"gaspass-servidor/interno/modelos"
 	"gaspass-servidor/interno/repositorios"
@@ -44,10 +45,11 @@ type reqEditarMoedaVirtualRede struct {
 	MoedaVirtualCotacao float64 `json:"moeda_virtual_cotacao"`
 }
 
-// reqEditarVoucherConfigRede PATCH gestor: ao menos um campo; valores opcionais mantêm o atual.
+// reqEditarVoucherConfigRede PATCH gestor: sem id (usa a rede da sessao). Super-admin: informe id da rede.
 type reqEditarVoucherConfigRede struct {
-	Dias    *int `json:"voucher_dias_validade_resgate"`
-	Minutos *int `json:"voucher_minutos_expira_pagamento_pix"`
+	ID      string `json:"id"`
+	Dias    *int   `json:"voucher_dias_validade_resgate"`
+	Minutos *int   `json:"voucher_minutos_expira_pagamento_pix"`
 }
 
 func (h *Handlers) ListarRedesDev(w http.ResponseWriter, r *http.Request) {
@@ -182,6 +184,43 @@ func (h *Handlers) EditarMoedaVirtualRedeDev(w http.ResponseWriter, r *http.Requ
 
 	utils.ResponderJSON(w, http.StatusOK, map[string]any{
 		"mensagem": "moeda virtual atualizada com sucesso",
+		"rede":     rede,
+	})
+}
+
+// EditarVoucherConfigRedeDev PATCH /v1/admin/redes/dev/config-voucher (super-admin)
+func (h *Handlers) EditarVoucherConfigRedeDev(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+	var req reqEditarVoucherConfigRede
+	if err := utils.DecodificarJSON(r, &req); err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, fmt.Sprintf("payload invalido: %v", err))
+		return
+	}
+	if strings.TrimSpace(req.ID) == "" {
+		utils.ResponderErro(w, http.StatusBadRequest, "informe id da rede")
+		return
+	}
+	rede, err := h.redeService.EditarVoucherConfig(servicos.EditarVoucherConfigRedeInput{
+		ID:      req.ID,
+		Dias:    req.Dias,
+		Minutos: req.Minutos,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, "informe ao menos um campo; dias 1-365; minutos PIX 5-10080")
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, err.Error())
+		default:
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao atualizar configuracao de voucher")
+		}
+		return
+	}
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"mensagem": "configuracao de voucher atualizada",
 		"rede":     rede,
 	})
 }
