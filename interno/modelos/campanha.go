@@ -41,9 +41,10 @@ type Campanha struct {
 	ValidaNoPostoFisico  bool           `json:"valida_no_posto_fisico"`
 	ModalidadeDesconto   string         `json:"modalidade_desconto"`
 	BaseDesconto         string         `json:"base_desconto"`
-	ValorDesconto        float64        `json:"valor_desconto"`
-	ValorMinimoCompra    float64        `json:"valor_minimo_compra"`
-	MaxUsosPorCliente    *int           `json:"max_usos_por_cliente,omitempty"`
+	ValorDesconto         float64        `json:"valor_desconto"`
+	ValorMinimoCompra     float64        `json:"valor_minimo_compra"`
+	ValorMaximoCompra     *float64       `json:"valor_maximo_compra,omitempty"`
+	MaxUsosPorCliente     *int           `json:"max_usos_por_cliente,omitempty"`
 	LitrosMin            *float64       `json:"litros_min,omitempty"`
 	LitrosMax            *float64       `json:"litros_max,omitempty"`
 	IDsCombustiveisRede  []string       `json:"ids_combustiveis_rede,omitempty"`

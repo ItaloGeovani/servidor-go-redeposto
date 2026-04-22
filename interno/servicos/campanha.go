@@ -32,6 +32,7 @@ type CriarCampanhaInput struct {
 	BaseDesconto          string
 	ValorDesconto         float64
 	ValorMinimoCompra     float64
+	ValorMaximoCompra     *float64
 	MaxUsosPorCliente     *int
 	LitrosMin             *float64
 	LitrosMax             *float64
@@ -53,12 +54,13 @@ type AtualizarCampanhaInput struct {
 	ValidaNoPostoFisico bool
 	ModalidadeDesconto  string
 	BaseDesconto        string
-	ValorDesconto       float64
-	ValorMinimoCompra   float64
-	MaxUsosPorCliente   *int
-	LitrosMin           *float64
-	LitrosMax           *float64
-	IDsCombustiveisRede []string
+	ValorDesconto         float64
+	ValorMinimoCompra     float64
+	ValorMaximoCompra     *float64
+	MaxUsosPorCliente     *int
+	LitrosMin             *float64
+	LitrosMax             *float64
+	IDsCombustiveisRede   []string
 }
 
 type campanhaRepo interface {
@@ -118,6 +120,17 @@ func normalizarBase(s string) string {
 		return modelos.BaseDescontoLitro
 	}
 	return modelos.BaseDescontoValorCompra
+}
+
+// validarFaixaValorCompra exige piso e teto em R$ para base VALOR_COMPRA (teto >= piso).
+func validarFaixaValorCompra(vmin float64, vmax *float64) bool {
+	if math.IsNaN(vmin) || math.IsInf(vmin, 0) || vmin < 0 {
+		return false
+	}
+	if vmax == nil || math.IsNaN(*vmax) || math.IsInf(*vmax, 0) {
+		return false
+	}
+	return *vmax >= vmin
 }
 
 func validarDescontoEUso(
@@ -273,7 +286,18 @@ func (s *servicoCampanha) Criar(sessaoCriador string, in CriarCampanhaInput) (*m
 	if !statusCampanhaValido(in.Status) {
 		return nil, ErrDadosInvalidos
 	}
-	if !validarDescontoEUso(in.ValidaNoApp, in.ValidaNoPostoFisico, mod, base, valor, in.ValorMinimoCompra, in.MaxUsosPorCliente) {
+	vminUse := in.ValorMinimoCompra
+	var vmaxUse *float64
+	if base == modelos.BaseDescontoLitro {
+		vminUse = 0
+		vmaxUse = nil
+	} else {
+		vmaxUse = in.ValorMaximoCompra
+		if !validarFaixaValorCompra(vminUse, vmaxUse) {
+			return nil, ErrDadosInvalidos
+		}
+	}
+	if !validarDescontoEUso(in.ValidaNoApp, in.ValidaNoPostoFisico, mod, base, valor, vminUse, in.MaxUsosPorCliente) {
 		return nil, ErrDadosInvalidos
 	}
 
@@ -306,7 +330,8 @@ func (s *servicoCampanha) Criar(sessaoCriador string, in CriarCampanhaInput) (*m
 		ModalidadeDesconto:   mod,
 		BaseDesconto:         base,
 		ValorDesconto:        valor,
-		ValorMinimoCompra:    in.ValorMinimoCompra,
+		ValorMinimoCompra:    vminUse,
+		ValorMaximoCompra:    vmaxUse,
 		MaxUsosPorCliente:    in.MaxUsosPorCliente,
 		LitrosMin:            litMinPtr,
 		LitrosMax:            litMaxPtr,
@@ -375,7 +400,18 @@ func (s *servicoCampanha) Atualizar(in AtualizarCampanhaInput) error {
 	if !statusCampanhaValido(in.Status) {
 		return ErrDadosInvalidos
 	}
-	if !validarDescontoEUso(in.ValidaNoApp, in.ValidaNoPostoFisico, mod, base, valor, in.ValorMinimoCompra, in.MaxUsosPorCliente) {
+	vminUse := in.ValorMinimoCompra
+	var vmaxUse *float64
+	if base == modelos.BaseDescontoLitro {
+		vminUse = 0
+		vmaxUse = nil
+	} else {
+		vmaxUse = in.ValorMaximoCompra
+		if !validarFaixaValorCompra(vminUse, vmaxUse) {
+			return ErrDadosInvalidos
+		}
+	}
+	if !validarDescontoEUso(in.ValidaNoApp, in.ValidaNoPostoFisico, mod, base, valor, vminUse, in.MaxUsosPorCliente) {
 		return ErrDadosInvalidos
 	}
 
@@ -409,7 +445,8 @@ func (s *servicoCampanha) Atualizar(in AtualizarCampanhaInput) error {
 		ModalidadeDesconto:  mod,
 		BaseDesconto:        base,
 		ValorDesconto:       valor,
-		ValorMinimoCompra:   in.ValorMinimoCompra,
+		ValorMinimoCompra:   vminUse,
+		ValorMaximoCompra:   vmaxUse,
 		MaxUsosPorCliente:   in.MaxUsosPorCliente,
 		LitrosMin:           litMinPtr,
 		LitrosMax:           litMaxPtr,

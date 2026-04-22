@@ -150,8 +150,13 @@ func (s *ServicoVoucherCompra) Calcular(
 	default:
 		return nil, ErrDadosInvalidos
 	}
-	if valorCompra < c.ValorMinimoCompra {
-		return nil, ErrDadosInvalidos
+	if c.BaseDesconto == modelos.BaseDescontoValorCompra {
+		if valorCompra+1e-9 < c.ValorMinimoCompra {
+			return nil, ErrDadosInvalidos
+		}
+		if c.ValorMaximoCompra != nil && valorCompra-1e-9 > *c.ValorMaximoCompra {
+			return nil, ErrDadosInvalidos
+		}
 	}
 	desconto, err := calcularDescontoCampanha(c, valorCompra, litrosVal)
 	if err != nil {

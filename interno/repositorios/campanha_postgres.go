@@ -97,6 +97,7 @@ SELECT
   c.base_desconto,
   c.valor_desconto::float8,
   c.valor_minimo_compra::float8,
+  c.valor_maximo_compra::float8,
   c.max_usos_por_cliente,
   c.litros_min::float8,
   c.litros_max::float8,
@@ -119,13 +120,14 @@ ORDER BY c.vigencia_inicio DESC NULLS LAST, c.criado_em DESC`
 		var c modelos.Campanha
 		var vigIni, vigFim sql.NullTime
 		var maxUsos sql.NullInt64
+		var vMaxCompra sql.NullFloat64
 		var litMin, litMax sql.NullFloat64
 		if err := rows.Scan(
 			&c.ID, &c.IDRede, &c.Nome, &c.Titulo, &c.Descricao, &c.ImagemURL,
 			&c.IDPosto, &c.Status, &vigIni, &vigFim,
 			&c.ValidaNoApp, &c.ValidaNoPostoFisico,
 			&c.ModalidadeDesconto, &c.BaseDesconto,
-			&c.ValorDesconto, &c.ValorMinimoCompra,
+			&c.ValorDesconto, &c.ValorMinimoCompra, &vMaxCompra,
 			&maxUsos,
 			&litMin, &litMax,
 			&c.CriadoPor, &c.CriadoEm, &c.AtualizadoEm,
@@ -151,6 +153,10 @@ ORDER BY c.vigencia_inicio DESC NULLS LAST, c.criado_em DESC`
 		if litMax.Valid {
 			v := litMax.Float64
 			c.LitrosMax = &v
+		}
+		if vMaxCompra.Valid {
+			v := vMaxCompra.Float64
+			c.ValorMaximoCompra = &v
 		}
 		preencherTituloExibicaoEscopo(&c)
 		lista = append(lista, &c)
@@ -240,6 +246,10 @@ func (r *campanhaPostgres) Criar(sessaoCriador string, c *modelos.Campanha) erro
 	if c.LitrosMax != nil {
 		litMax = *c.LitrosMax
 	}
+	var vMax any
+	if c.ValorMaximoCompra != nil {
+		vMax = *c.ValorMaximoCompra
+	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -252,14 +262,14 @@ INSERT INTO campanhas (
   rede_id, nome, descricao, status, criado_por,
   imagem_url, titulo, posto_id, vigencia_inicio, vigencia_fim,
   valida_no_app, valida_no_posto_fisico,
-  modalidade_desconto, base_desconto, valor_desconto, valor_minimo_compra, max_usos_por_cliente,
+  modalidade_desconto, base_desconto, valor_desconto, valor_minimo_compra, valor_maximo_compra, max_usos_por_cliente,
   litros_min, litros_max
 )
 VALUES (
   $1::uuid, $2, NULLIF($3, ''), $4::status_campanha, $5::uuid,
   NULLIF($6, ''), NULLIF($7, ''), $8, $9, $10,
-  $11, $12, $13, $14, $15, $16, $17,
-  $18, $19
+  $11, $12, $13, $14, $15, $16, $17, $18,
+  $19, $20
 )
 RETURNING id::text, criado_em, atualizado_em`
 
@@ -282,6 +292,7 @@ RETURNING id::text, criado_em, atualizado_em`
 		strings.TrimSpace(c.BaseDesconto),
 		c.ValorDesconto,
 		c.ValorMinimoCompra,
+		vMax,
 		maxUsos,
 		litMin, litMax,
 	).Scan(&c.ID, &c.CriadoEm, &c.AtualizadoEm)
@@ -329,6 +340,10 @@ func (r *campanhaPostgres) Atualizar(c *modelos.Campanha) error {
 	if c.LitrosMax != nil {
 		litMax = *c.LitrosMax
 	}
+	var vMax any
+	if c.ValorMaximoCompra != nil {
+		vMax = *c.ValorMaximoCompra
+	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -352,11 +367,12 @@ UPDATE campanhas SET
   base_desconto = $12,
   valor_desconto = $13,
   valor_minimo_compra = $14,
-  max_usos_por_cliente = $15,
-  litros_min = $16,
-  litros_max = $17,
+  valor_maximo_compra = $15,
+  max_usos_por_cliente = $16,
+  litros_min = $17,
+  litros_max = $18,
   atualizado_em = NOW()
-WHERE id = $18::uuid AND rede_id = $19::uuid`
+WHERE id = $19::uuid AND rede_id = $20::uuid`
 
 	res, err := tx.ExecContext(
 		ctx,
@@ -375,6 +391,7 @@ WHERE id = $18::uuid AND rede_id = $19::uuid`
 		strings.TrimSpace(c.BaseDesconto),
 		c.ValorDesconto,
 		c.ValorMinimoCompra,
+		vMax,
 		maxUsos,
 		litMin, litMax,
 		strings.TrimSpace(c.ID),

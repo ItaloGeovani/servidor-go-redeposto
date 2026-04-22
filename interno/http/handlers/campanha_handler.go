@@ -30,6 +30,7 @@ type reqCriarCampanha struct {
 	BaseDesconto          string   `json:"base_desconto"`
 	ValorDesconto         float64    `json:"valor_desconto"`
 	ValorMinimoCompra     float64    `json:"valor_minimo_compra"`
+	ValorMaximoCompra     *float64   `json:"valor_maximo_compra"`
 	MaxUsosPorCliente     *int       `json:"max_usos_por_cliente"`
 	LitrosMin             *float64   `json:"litros_min"`
 	LitrosMax             *float64   `json:"litros_max"`
@@ -53,6 +54,7 @@ type reqEditarCampanha struct {
 	BaseDesconto        string   `json:"base_desconto"`
 	ValorDesconto         float64    `json:"valor_desconto"`
 	ValorMinimoCompra     float64    `json:"valor_minimo_compra"`
+	ValorMaximoCompra     *float64   `json:"valor_maximo_compra"`
 	MaxUsosPorCliente     *int       `json:"max_usos_por_cliente"`
 	LitrosMin             *float64   `json:"litros_min"`
 	LitrosMax             *float64   `json:"litros_max"`
@@ -136,6 +138,7 @@ func (h *Handlers) CriarCampanhaRedeDev(w http.ResponseWriter, r *http.Request) 
 		BaseDesconto:          req.BaseDesconto,
 		ValorDesconto:         req.ValorDesconto,
 		ValorMinimoCompra:     req.ValorMinimoCompra,
+		ValorMaximoCompra:     req.ValorMaximoCompra,
 		MaxUsosPorCliente:     req.MaxUsosPorCliente,
 		LitrosMin:             req.LitrosMin,
 		LitrosMax:             req.LitrosMax,
@@ -200,6 +203,7 @@ func (h *Handlers) EditarCampanhaRedeDev(w http.ResponseWriter, r *http.Request)
 		BaseDesconto:        req.BaseDesconto,
 		ValorDesconto:         req.ValorDesconto,
 		ValorMinimoCompra:     req.ValorMinimoCompra,
+		ValorMaximoCompra:     req.ValorMaximoCompra,
 		MaxUsosPorCliente:     req.MaxUsosPorCliente,
 		LitrosMin:             req.LitrosMin,
 		LitrosMax:             req.LitrosMax,
