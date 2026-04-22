@@ -149,9 +149,12 @@ func (h *Handlers) CriarCampanhaGestorRede(w http.ResponseWriter, r *http.Reques
 		ValidaNoPostoFisico: boolOuPadrao(req.ValidaNoPostoFisico, false),
 		ModalidadeDesconto:  req.ModalidadeDesconto,
 		BaseDesconto:        req.BaseDesconto,
-		ValorDesconto:       req.ValorDesconto,
-		ValorMinimoCompra:   req.ValorMinimoCompra,
-		MaxUsosPorCliente:   req.MaxUsosPorCliente,
+		ValorDesconto:         req.ValorDesconto,
+		ValorMinimoCompra:     req.ValorMinimoCompra,
+		MaxUsosPorCliente:     req.MaxUsosPorCliente,
+		LitrosMin:             req.LitrosMin,
+		LitrosMax:             req.LitrosMax,
+		IDsCombustiveisRede:   req.IDsCombustiveisRede,
 	})
 	if err != nil {
 		switch {
@@ -211,9 +214,12 @@ func (h *Handlers) EditarCampanhaGestorRede(w http.ResponseWriter, r *http.Reque
 		ValidaNoPostoFisico: boolOuPadrao(req.ValidaNoPostoFisico, false),
 		ModalidadeDesconto:  req.ModalidadeDesconto,
 		BaseDesconto:        req.BaseDesconto,
-		ValorDesconto:       req.ValorDesconto,
-		ValorMinimoCompra:   req.ValorMinimoCompra,
-		MaxUsosPorCliente:   req.MaxUsosPorCliente,
+		ValorDesconto:         req.ValorDesconto,
+		ValorMinimoCompra:     req.ValorMinimoCompra,
+		MaxUsosPorCliente:     req.MaxUsosPorCliente,
+		LitrosMin:             req.LitrosMin,
+		LitrosMax:             req.LitrosMax,
+		IDsCombustiveisRede:   req.IDsCombustiveisRede,
 	})
 	if err != nil {
 		switch {

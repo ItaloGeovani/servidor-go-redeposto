@@ -30,6 +30,10 @@ func RegistrarGestorRedePainel(muxPrincipal *http.ServeMux, h *handlers.Handlers
 	mux.Handle("/v1/gestor-rede/dev/auditoria/listar", http.HandlerFunc(h.ListarAuditoriaGestorRede))
 	mux.Handle("/v1/gestor-rede/dev/app-cards", http.HandlerFunc(h.AppCardsGestorRede))
 	mux.Handle("/v1/gestor-rede/dev/mercadopago-gateway", http.HandlerFunc(h.MercadoPagoGatewayGestor))
+	mux.Handle("/v1/gestor-rede/dev/combustiveis/listar", http.HandlerFunc(h.ListarCombustiveisRede))
+	mux.Handle("/v1/gestor-rede/dev/combustiveis/criar", http.HandlerFunc(h.CriarCombustivelRede))
+	mux.Handle("/v1/gestor-rede/dev/combustiveis/editar", http.HandlerFunc(h.EditarCombustivelRede))
+	mux.Handle("/v1/gestor-rede/dev/combustiveis/excluir", http.HandlerFunc(h.ExcluirCombustivelRede))
 
 	chain := append([]middlewares.Middleware{}, mws...)
 	chain = append(chain, middlewares.ExigirAutenticacao(aut), middlewares.ExigirPapel(modelos.PapelGestorRede))

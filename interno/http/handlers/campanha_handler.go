@@ -28,9 +28,12 @@ type reqCriarCampanha struct {
 	ValidaNoPostoFisico   *bool    `json:"valida_no_posto_fisico"`
 	ModalidadeDesconto    string   `json:"modalidade_desconto"`
 	BaseDesconto          string   `json:"base_desconto"`
-	ValorDesconto         float64  `json:"valor_desconto"`
-	ValorMinimoCompra     float64  `json:"valor_minimo_compra"`
-	MaxUsosPorCliente     *int     `json:"max_usos_por_cliente"`
+	ValorDesconto         float64    `json:"valor_desconto"`
+	ValorMinimoCompra     float64    `json:"valor_minimo_compra"`
+	MaxUsosPorCliente     *int       `json:"max_usos_por_cliente"`
+	LitrosMin             *float64   `json:"litros_min"`
+	LitrosMax             *float64   `json:"litros_max"`
+	IDsCombustiveisRede   []string   `json:"ids_combustiveis_rede"`
 }
 
 type reqEditarCampanha struct {
@@ -48,9 +51,12 @@ type reqEditarCampanha struct {
 	ValidaNoPostoFisico *bool    `json:"valida_no_posto_fisico"`
 	ModalidadeDesconto  string   `json:"modalidade_desconto"`
 	BaseDesconto        string   `json:"base_desconto"`
-	ValorDesconto       float64  `json:"valor_desconto"`
-	ValorMinimoCompra   float64  `json:"valor_minimo_compra"`
-	MaxUsosPorCliente   *int     `json:"max_usos_por_cliente"`
+	ValorDesconto         float64    `json:"valor_desconto"`
+	ValorMinimoCompra     float64    `json:"valor_minimo_compra"`
+	MaxUsosPorCliente     *int       `json:"max_usos_por_cliente"`
+	LitrosMin             *float64   `json:"litros_min"`
+	LitrosMax             *float64   `json:"litros_max"`
+	IDsCombustiveisRede   []string   `json:"ids_combustiveis_rede"`
 }
 
 func boolOuPadrao(v *bool, padrao bool) bool {
@@ -131,6 +137,9 @@ func (h *Handlers) CriarCampanhaRedeDev(w http.ResponseWriter, r *http.Request) 
 		ValorDesconto:         req.ValorDesconto,
 		ValorMinimoCompra:     req.ValorMinimoCompra,
 		MaxUsosPorCliente:     req.MaxUsosPorCliente,
+		LitrosMin:             req.LitrosMin,
+		LitrosMax:             req.LitrosMax,
+		IDsCombustiveisRede:   req.IDsCombustiveisRede,
 	})
 	if err != nil {
 		switch {
@@ -189,9 +198,12 @@ func (h *Handlers) EditarCampanhaRedeDev(w http.ResponseWriter, r *http.Request)
 		ValidaNoPostoFisico: boolOuPadrao(req.ValidaNoPostoFisico, false),
 		ModalidadeDesconto:  req.ModalidadeDesconto,
 		BaseDesconto:        req.BaseDesconto,
-		ValorDesconto:       req.ValorDesconto,
-		ValorMinimoCompra:   req.ValorMinimoCompra,
-		MaxUsosPorCliente:   req.MaxUsosPorCliente,
+		ValorDesconto:         req.ValorDesconto,
+		ValorMinimoCompra:     req.ValorMinimoCompra,
+		MaxUsosPorCliente:     req.MaxUsosPorCliente,
+		LitrosMin:             req.LitrosMin,
+		LitrosMax:             req.LitrosMax,
+		IDsCombustiveisRede:   req.IDsCombustiveisRede,
 	})
 	if err != nil {
 		switch {

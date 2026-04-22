@@ -453,6 +453,32 @@ LIMIT 1`
 	return &row, nil
 }
 
+// EmailECPFPorUsuarioRede retorna email e CPF (digitos em texto) para o perfil / PIX.
+func (r *usuarioRedePostgres) EmailECPFPorUsuarioRede(idUsuario, idRede string) (email string, cpf string, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	idUsuario = strings.TrimSpace(idUsuario)
+	idRede = strings.TrimSpace(idRede)
+	if idUsuario == "" || idRede == "" {
+		return "", "", nil
+	}
+	const q = `
+SELECT TRIM(COALESCE(u.email, '')),
+  TRIM(COALESCE(u.cpf, ''))
+FROM usuarios u
+WHERE u.id = $1::uuid AND u.rede_id = $2::uuid`
+	err = r.db.QueryRowContext(ctx, q, idUsuario, idRede).Scan(&email, &cpf)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	email = strings.TrimSpace(email)
+	cpf = strings.TrimSpace(cpf)
+	return email, cpf, nil
+}
+
 func (r *usuarioRedePostgres) postoPertenceARedeTx(ctx context.Context, tx *sql.Tx, idPosto, idRede string) (bool, error) {
 	var um int
 	err := tx.QueryRowContext(ctx, `

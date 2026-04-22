@@ -23,6 +23,8 @@ type ServicoUsuarioRede interface {
 	LoginPainel(email, senha string) (string, *modelos.UsuarioSessao, error)
 	CadastrarClienteApp(in CadastroClienteAppInput) (string, *modelos.UsuarioSessao, error)
 	ExcluirContaClienteApp(idUsuario, idRede string) error
+	// EmailECPFPorUsuarioRede e-mail e CPF cadastrados (app / pagamento).
+	EmailECPFPorUsuarioRede(idUsuario, idRede string) (email string, cpf string, err error)
 }
 
 // CriarUsuarioEquipeInput cadastro de gerente de posto ou frentista pelo admin global.
@@ -75,6 +77,7 @@ type usuarioRedePostgresRepo interface {
 	AtualizarUsuarioEquipe(idRede, idUsuario string, nome, email, telefone string, ativo bool, papel, idPosto, senhaHashOuVazio string) (*modelos.UsuarioVinculoRede, error)
 	BuscarPorEmailParaLoginPainel(email string) (*repositorios.UsuarioPainelLogin, error)
 	PostoPertenceARede(idPosto, idRede string) (bool, error)
+	EmailECPFPorUsuarioRede(idUsuario, idRede string) (email string, cpf string, err error)
 }
 
 type servicoUsuarioRede struct {
@@ -303,4 +306,8 @@ func (s *servicoUsuarioRede) ExcluirContaClienteApp(idUsuario, idRede string) er
 		return ErrDadosInvalidos
 	}
 	return s.repoUsuarios.ExcluirContaClientePorID(idUsuario, idRede)
+}
+
+func (s *servicoUsuarioRede) EmailECPFPorUsuarioRede(idUsuario, idRede string) (email string, cpf string, err error) {
+	return s.repoUsuarios.EmailECPFPorUsuarioRede(idUsuario, idRede)
 }

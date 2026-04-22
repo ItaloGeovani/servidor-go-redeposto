@@ -26,6 +26,10 @@ func RegistrarGerentePostoPainel(muxPrincipal *http.ServeMux, h *handlers.Handle
 	mux.Handle("/v1/gerente-posto/dev/relatorios/resumo", http.HandlerFunc(h.ResumoRelatoriosGestorRede))
 	mux.Handle("/v1/gerente-posto/dev/auditoria/listar", http.HandlerFunc(h.ListarAuditoriaGestorRede))
 	mux.Handle("/v1/gerente-posto/dev/app-cards", http.HandlerFunc(h.AppCardsGestorRede))
+	mux.Handle("/v1/gerente-posto/dev/combustiveis/listar", http.HandlerFunc(h.ListarCombustiveisRede))
+	mux.Handle("/v1/gerente-posto/dev/combustiveis/criar", http.HandlerFunc(h.CriarCombustivelRede))
+	mux.Handle("/v1/gerente-posto/dev/combustiveis/editar", http.HandlerFunc(h.EditarCombustivelRede))
+	mux.Handle("/v1/gerente-posto/dev/combustiveis/excluir", http.HandlerFunc(h.ExcluirCombustivelRede))
 
 	chain := append([]middlewares.Middleware{}, mws...)
 	chain = append(chain, middlewares.ExigirAutenticacao(aut), middlewares.ExigirPapel(modelos.PapelGerentePosto))

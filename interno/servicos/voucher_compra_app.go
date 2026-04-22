@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -31,11 +32,12 @@ var ErrVoucherCampanhaInvalida = errors.New("campanha invalida ou inaplicavel")
 
 // ServicoVoucherCompra compra de voucher no app (PIX + campanha).
 type ServicoVoucherCompra struct {
-	repo     repositorios.VoucherCompraRepositorio
-	campanha ServicoCampanha
-	mpGW     repositorios.MercadoPagoGatewayRepositorio
-	rede     repositorios.RedeRepositorio
-	cfg      config.Config
+	repo       repositorios.VoucherCompraRepositorio
+	campanha   ServicoCampanha
+	combustive repositorios.CombustivelRedeRepositorio
+	mpGW       repositorios.MercadoPagoGatewayRepositorio
+	rede       repositorios.RedeRepositorio
+	cfg        config.Config
 }
 
 func NovoServicoVoucherCompra(
@@ -43,9 +45,10 @@ func NovoServicoVoucherCompra(
 	camp ServicoCampanha,
 	mp repositorios.MercadoPagoGatewayRepositorio,
 	rede repositorios.RedeRepositorio,
+	comb repositorios.CombustivelRedeRepositorio,
 	cfg config.Config,
 ) *ServicoVoucherCompra {
-	return &ServicoVoucherCompra{repo: repo, campanha: camp, mpGW: mp, rede: rede, cfg: cfg}
+	return &ServicoVoucherCompra{repo: repo, campanha: camp, mpGW: mp, rede: rede, combustive: comb, cfg: cfg}
 }
 
 func (s *ServicoVoucherCompra) duracaoPagamentoPix(idRede string) time.Duration {
@@ -83,31 +86,83 @@ type ResultadoCalcularVoucher struct {
 }
 
 // Calcular aplica regras de campanha (sem persistir).
-func (s *ServicoVoucherCompra) Calcular(idRede string, valor float64, idCampanha *string, agora time.Time) (*ResultadoCalcularVoucher, error) {
-	if strings.TrimSpace(idRede) == "" || valor < 1.0 {
+// Para campanha por litro: informe idCombustivelRede e litros; o valor da compra é obtido com preco_por_litro do cadastro.
+func (s *ServicoVoucherCompra) Calcular(
+	idRede string,
+	valor float64,
+	idCampanha *string,
+	agora time.Time,
+	idCombustivelRede *string,
+	litros *float64,
+) (*ResultadoCalcularVoucher, error) {
+	if strings.TrimSpace(idRede) == "" {
 		return nil, ErrDadosInvalidos
 	}
-	valor = round2(valor)
-	out := &ResultadoCalcularVoucher{ValorSolicitado: valor, ValorFinal: valor, DescontoAplicado: 0}
 	if idCampanha == nil || strings.TrimSpace(*idCampanha) == "" {
-		return out, nil
+		if valor < 1.0 {
+			return nil, ErrDadosInvalidos
+		}
+		v := round2(valor)
+		return &ResultadoCalcularVoucher{ValorSolicitado: v, ValorFinal: v, DescontoAplicado: 0}, nil
 	}
 	c, err := s.buscarCampanhaElegivel(idRede, strings.TrimSpace(*idCampanha), agora)
 	if err != nil {
 		return nil, err
 	}
-	desconto, err := calcularDescontoCampanha(c, valor)
+	var valorCompra float64
+	var litrosVal *float64
+	switch c.BaseDesconto {
+	case modelos.BaseDescontoLitro:
+		if idCombustivelRede == nil || strings.TrimSpace(*idCombustivelRede) == "" || litros == nil || *litros <= 0 {
+			return nil, ErrDadosInvalidos
+		}
+		if c.LitrosMin == nil || c.LitrosMax == nil {
+			return nil, ErrDadosInvalidos
+		}
+		if *litros+1e-9 < *c.LitrosMin || *litros-1e-9 > *c.LitrosMax {
+			return nil, ErrDadosInvalidos
+		}
+		if len(c.IDsCombustiveisRede) == 0 {
+			return nil, ErrDadosInvalidos
+		}
+		idC := strings.TrimSpace(*idCombustivelRede)
+		if !slices.Contains(c.IDsCombustiveisRede, idC) {
+			return nil, ErrVoucherCampanhaInvalida
+		}
+		if s.combustive == nil {
+			return nil, ErrDadosInvalidos
+		}
+		comb, err := s.combustive.BuscarPorID(idC, idRede)
+		if err != nil || !comb.Ativo {
+			return nil, ErrVoucherCampanhaInvalida
+		}
+		valorCompra = round2(comb.PrecoPorLitro * (*litros))
+		if valorCompra < 1.0 {
+			return nil, ErrDadosInvalidos
+		}
+		lv := *litros
+		litrosVal = &lv
+	case modelos.BaseDescontoValorCompra:
+		if valor < 1.0 {
+			return nil, ErrDadosInvalidos
+		}
+		valorCompra = round2(valor)
+	default:
+		return nil, ErrDadosInvalidos
+	}
+	if valorCompra < c.ValorMinimoCompra {
+		return nil, ErrDadosInvalidos
+	}
+	desconto, err := calcularDescontoCampanha(c, valorCompra, litrosVal)
 	if err != nil {
 		return nil, err
 	}
-	if valor < c.ValorMinimoCompra {
-		return nil, ErrDadosInvalidos
-	}
+	out := &ResultadoCalcularVoucher{ValorSolicitado: valorCompra, ValorFinal: valorCompra, DescontoAplicado: 0}
 	if c.MaxUsosPorCliente != nil {
-		// contagem feita em Pagar com usuarioID; aqui só avisamos no Pagar
+		// contagem feita em Pagar com usuarioID
 	}
 	out.DescontoAplicado = round2(desconto)
-	out.ValorFinal = round2(math.Max(0.01, valor-out.DescontoAplicado))
+	out.ValorFinal = round2(math.Max(0.01, valorCompra-out.DescontoAplicado))
 	out.CampanhaID = idCampanha
 	out.CampanhaTitulo = tituloCampanha(c)
 	return out, nil
@@ -136,16 +191,36 @@ func tituloCampanha(c *modelos.Campanha) string {
 	return strings.TrimSpace(c.Nome)
 }
 
-func calcularDescontoCampanha(c *modelos.Campanha, valorCompra float64) (float64, error) {
+func calcularDescontoCampanha(c *modelos.Campanha, valorCompra float64, litros *float64) (float64, error) {
 	switch c.ModalidadeDesconto {
 	case modelos.ModalidadeDescontoNenhum:
 		return 0, nil
 	case modelos.ModalidadeDescontoPercentual:
+		if c.BaseDesconto == modelos.BaseDescontoLitro {
+			// desconto percentual sobre o subtotal (preco*litros)
+			if litros == nil {
+				return 0, ErrDadosInvalidos
+			}
+			return valorCompra * (c.ValorDesconto / 100.0), nil
+		}
 		if c.BaseDesconto != modelos.BaseDescontoValorCompra {
 			return 0, ErrDadosInvalidos
 		}
 		return valorCompra * (c.ValorDesconto / 100.0), nil
 	case modelos.ModalidadeDescontoValorFixo:
+		if c.BaseDesconto == modelos.BaseDescontoLitro {
+			if litros == nil {
+				return 0, ErrDadosInvalidos
+			}
+			d := c.ValorDesconto * (*litros)
+			if d > valorCompra-0.01 {
+				d = valorCompra - 0.01
+			}
+			if d < 0 {
+				d = 0
+			}
+			return d, nil
+		}
 		if c.BaseDesconto != modelos.BaseDescontoValorCompra {
 			return 0, ErrDadosInvalidos
 		}
@@ -168,12 +243,13 @@ func round2(x float64) float64 {
 
 // PagarComPixInicia cria cobrança MP e registro local.
 func (s *ServicoVoucherCompra) PagarComPixInicia(ctx context.Context, idRede, idUsuario string, valor float64, idCampanha *string,
+	idCombustivelRede *string, litros *float64,
 	payerEmail, docTipo, docNumero string, agora time.Time,
 ) (*repositorios.VoucherCompraRegistro, *payment.Response, error) {
 	if strings.TrimSpace(idRede) == "" || strings.TrimSpace(idUsuario) == "" {
 		return nil, nil, ErrDadosInvalidos
 	}
-	calc, err := s.Calcular(idRede, valor, idCampanha, agora)
+	calc, err := s.Calcular(idRede, valor, idCampanha, agora, idCombustivelRede, litros)
 	if err != nil {
 		return nil, nil, err
 	}

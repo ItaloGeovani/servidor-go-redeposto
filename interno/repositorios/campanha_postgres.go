@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -97,6 +98,8 @@ SELECT
   c.valor_desconto::float8,
   c.valor_minimo_compra::float8,
   c.max_usos_por_cliente,
+  c.litros_min::float8,
+  c.litros_max::float8,
   c.criado_por::text,
   c.criado_em,
   c.atualizado_em
@@ -111,10 +114,12 @@ ORDER BY c.vigencia_inicio DESC NULLS LAST, c.criado_em DESC`
 	defer rows.Close()
 
 	var lista []*modelos.Campanha
+	var idsCampanhas []string
 	for rows.Next() {
 		var c modelos.Campanha
 		var vigIni, vigFim sql.NullTime
 		var maxUsos sql.NullInt64
+		var litMin, litMax sql.NullFloat64
 		if err := rows.Scan(
 			&c.ID, &c.IDRede, &c.Nome, &c.Titulo, &c.Descricao, &c.ImagemURL,
 			&c.IDPosto, &c.Status, &vigIni, &vigFim,
@@ -122,6 +127,7 @@ ORDER BY c.vigencia_inicio DESC NULLS LAST, c.criado_em DESC`
 			&c.ModalidadeDesconto, &c.BaseDesconto,
 			&c.ValorDesconto, &c.ValorMinimoCompra,
 			&maxUsos,
+			&litMin, &litMax,
 			&c.CriadoPor, &c.CriadoEm, &c.AtualizadoEm,
 		); err != nil {
 			return nil, err
@@ -138,17 +144,69 @@ ORDER BY c.vigencia_inicio DESC NULLS LAST, c.criado_em DESC`
 			v := int(maxUsos.Int64)
 			c.MaxUsosPorCliente = &v
 		}
+		if litMin.Valid {
+			v := litMin.Float64
+			c.LitrosMin = &v
+		}
+		if litMax.Valid {
+			v := litMax.Float64
+			c.LitrosMax = &v
+		}
 		preencherTituloExibicaoEscopo(&c)
 		lista = append(lista, &c)
+		idsCampanhas = append(idsCampanhas, c.ID)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if len(lista) == 0 {
+		return lista, nil
+	}
+	m, err := r.mapaCombustiveisCampanhas(ctx, idsCampanhas)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range lista {
+		if ids, ok := m[c.ID]; ok {
+			c.IDsCombustiveisRede = ids
+		} else {
+			c.IDsCombustiveisRede = nil
+		}
+	}
 	return lista, nil
 }
 
+func (r *campanhaPostgres) mapaCombustiveisCampanhas(ctx context.Context, idsCampanha []string) (map[string][]string, error) {
+	out := make(map[string][]string)
+	if len(idsCampanha) == 0 {
+		return out, nil
+	}
+	place := make([]string, len(idsCampanha))
+	args := make([]any, len(idsCampanha))
+	for i, id := range idsCampanha {
+		place[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = id
+	}
+	q := `SELECT campanha_id::text, combustivel_rede_id::text
+FROM campanha_combustiveis_rede
+WHERE campanha_id IN (` + strings.Join(place, ",") + `)`
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var campID, combID string
+		if err := rows.Scan(&campID, &combID); err != nil {
+			return nil, err
+		}
+		out[campID] = append(out[campID], combID)
+	}
+	return out, rows.Err()
+}
+
 func (r *campanhaPostgres) Criar(sessaoCriador string, c *modelos.Campanha) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
 	criadoPor, err := r.resolverCriadoPor(sessaoCriador)
@@ -175,22 +233,37 @@ func (r *campanhaPostgres) Criar(sessaoCriador string, c *modelos.Campanha) erro
 	if c.MaxUsosPorCliente != nil {
 		maxUsos = *c.MaxUsosPorCliente
 	}
+	var litMin, litMax any
+	if c.LitrosMin != nil {
+		litMin = *c.LitrosMin
+	}
+	if c.LitrosMax != nil {
+		litMax = *c.LitrosMax
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
 	const query = `
 INSERT INTO campanhas (
   rede_id, nome, descricao, status, criado_por,
   imagem_url, titulo, posto_id, vigencia_inicio, vigencia_fim,
   valida_no_app, valida_no_posto_fisico,
-  modalidade_desconto, base_desconto, valor_desconto, valor_minimo_compra, max_usos_por_cliente
+  modalidade_desconto, base_desconto, valor_desconto, valor_minimo_compra, max_usos_por_cliente,
+  litros_min, litros_max
 )
 VALUES (
   $1::uuid, $2, NULLIF($3, ''), $4::status_campanha, $5::uuid,
   NULLIF($6, ''), NULLIF($7, ''), $8, $9, $10,
-  $11, $12, $13, $14, $15, $16, $17
+  $11, $12, $13, $14, $15, $16, $17,
+  $18, $19
 )
 RETURNING id::text, criado_em, atualizado_em`
 
-	err = r.db.QueryRowContext(
+	err = tx.QueryRowContext(
 		ctx,
 		query,
 		strings.TrimSpace(c.IDRede),
@@ -210,8 +283,15 @@ RETURNING id::text, criado_em, atualizado_em`
 		c.ValorDesconto,
 		c.ValorMinimoCompra,
 		maxUsos,
+		litMin, litMax,
 	).Scan(&c.ID, &c.CriadoEm, &c.AtualizadoEm)
 	if err != nil {
+		return err
+	}
+	if err := r.sincronizarCombustiveisTx(ctx, tx, c.ID, c.IDsCombustiveisRede); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	c.CriadoPor = criadoPor
@@ -220,7 +300,7 @@ RETURNING id::text, criado_em, atualizado_em`
 }
 
 func (r *campanhaPostgres) Atualizar(c *modelos.Campanha) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
 	var posto any
@@ -242,6 +322,19 @@ func (r *campanhaPostgres) Atualizar(c *modelos.Campanha) error {
 	if c.MaxUsosPorCliente != nil {
 		maxUsos = *c.MaxUsosPorCliente
 	}
+	var litMin, litMax any
+	if c.LitrosMin != nil {
+		litMin = *c.LitrosMin
+	}
+	if c.LitrosMax != nil {
+		litMax = *c.LitrosMax
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
 	const query = `
 UPDATE campanhas SET
@@ -260,10 +353,12 @@ UPDATE campanhas SET
   valor_desconto = $13,
   valor_minimo_compra = $14,
   max_usos_por_cliente = $15,
+  litros_min = $16,
+  litros_max = $17,
   atualizado_em = NOW()
-WHERE id = $16::uuid AND rede_id = $17::uuid`
+WHERE id = $18::uuid AND rede_id = $19::uuid`
 
-	res, err := r.db.ExecContext(
+	res, err := tx.ExecContext(
 		ctx,
 		query,
 		strings.TrimSpace(c.Nome),
@@ -281,6 +376,7 @@ WHERE id = $16::uuid AND rede_id = $17::uuid`
 		c.ValorDesconto,
 		c.ValorMinimoCompra,
 		maxUsos,
+		litMin, litMax,
 		strings.TrimSpace(c.ID),
 		strings.TrimSpace(c.IDRede),
 	)
@@ -293,6 +389,34 @@ WHERE id = $16::uuid AND rede_id = $17::uuid`
 	}
 	if n == 0 {
 		return ErrCampanhaNaoEncontrada
+	}
+	if err := r.sincronizarCombustiveisTx(ctx, tx, c.ID, c.IDsCombustiveisRede); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *campanhaPostgres) sincronizarCombustiveisTx(ctx context.Context, tx *sql.Tx, campanhaID string, ids []string) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM campanha_combustiveis_rede WHERE campanha_id = $1::uuid`, strings.TrimSpace(campanhaID)); err != nil {
+		return err
+	}
+	seen := map[string]struct{}{}
+	for _, raw := range ids {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		if _, err := tx.ExecContext(ctx, `
+INSERT INTO campanha_combustiveis_rede (campanha_id, combustivel_rede_id)
+VALUES ($1::uuid, $2::uuid)`,
+			strings.TrimSpace(campanhaID), id,
+		); err != nil {
+			return err
+		}
 	}
 	return nil
 }

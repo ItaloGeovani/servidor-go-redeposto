@@ -31,14 +31,16 @@ func (h *Handlers) PostVoucherCompraCalcular(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var body struct {
-		Valor         float64 `json:"valor"`
-		IDCampanha    *string `json:"id_campanha"`
+		Valor                 float64  `json:"valor"`
+		IDCampanha            *string  `json:"id_campanha"`
+		IDCombustivelRede     *string  `json:"id_combustivel_rede"`
+		Litros                *float64 `json:"litros"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
 		utils.ResponderErro(w, http.StatusBadRequest, "json invalido")
 		return
 	}
-	out, err := h.voucherCompraSvc.Calcular(u.IDRede, body.Valor, body.IDCampanha, time.Now())
+	out, err := h.voucherCompraSvc.Calcular(u.IDRede, body.Valor, body.IDCampanha, time.Now(), body.IDCombustivelRede, body.Litros)
 	if err != nil {
 		if errors.Is(err, servicos.ErrDadosInvalidos) {
 			utils.ResponderErro(w, http.StatusBadRequest, "informe um valor minimo de R$ 1,00 e verifique a campanha")
@@ -70,11 +72,13 @@ func (h *Handlers) PostVoucherCompraPagar(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var body struct {
-		Valor         float64 `json:"valor"`
-		IDCampanha    *string `json:"id_campanha"`
-		PayerEmail    string  `json:"payer_email"`
-		DocTipo       string  `json:"doc_tipo"`
-		DocNumero     string  `json:"doc_numero"`
+		Valor             float64  `json:"valor"`
+		IDCampanha        *string  `json:"id_campanha"`
+		IDCombustivelRede *string  `json:"id_combustivel_rede"`
+		Litros            *float64 `json:"litros"`
+		PayerEmail        string   `json:"payer_email"`
+		DocTipo           string   `json:"doc_tipo"`
+		DocNumero         string   `json:"doc_numero"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
 		utils.ResponderErro(w, http.StatusBadRequest, "json invalido")
@@ -92,7 +96,7 @@ func (h *Handlers) PostVoucherCompraPagar(w http.ResponseWriter, r *http.Request
 		return
 	}
 	ctx := r.Context()
-	reg, pay, err := h.voucherCompraSvc.PagarComPixInicia(ctx, u.IDRede, u.IDUsuario, body.Valor, body.IDCampanha, body.PayerEmail, body.DocTipo, body.DocNumero, time.Now())
+	reg, pay, err := h.voucherCompraSvc.PagarComPixInicia(ctx, u.IDRede, u.IDUsuario, body.Valor, body.IDCampanha, body.IDCombustivelRede, body.Litros, body.PayerEmail, body.DocTipo, body.DocNumero, time.Now())
 	if err != nil {
 		if errors.Is(err, servicos.ErrDadosInvalidos) || errors.Is(err, servicos.ErrVoucherCampanhaInvalida) {
 			utils.ResponderErro(w, http.StatusBadRequest, err.Error())

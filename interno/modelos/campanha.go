@@ -44,6 +44,9 @@ type Campanha struct {
 	ValorDesconto        float64        `json:"valor_desconto"`
 	ValorMinimoCompra    float64        `json:"valor_minimo_compra"`
 	MaxUsosPorCliente    *int           `json:"max_usos_por_cliente,omitempty"`
+	LitrosMin            *float64       `json:"litros_min,omitempty"`
+	LitrosMax            *float64       `json:"litros_max,omitempty"`
+	IDsCombustiveisRede  []string       `json:"ids_combustiveis_rede,omitempty"`
 	CriadoPor            string         `json:"criado_por"`
 	CriadoEm             time.Time      `json:"criado_em"`
 	AtualizadoEm         time.Time      `json:"atualizado_em"`

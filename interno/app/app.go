@@ -48,6 +48,7 @@ func Nova() (*Aplicacao, error) {
 	repoAppCards := repositorios.NovoAppCardsRedePostgres(banco)
 	repoMercadoPagoGateway := repositorios.NovoMercadoPagoGatewayPostgres(banco)
 	repoVoucherCompra := repositorios.NovoVoucherCompraPostgres(banco)
+	repoCombustivelRede := repositorios.NovoCombustivelRedePostgres(banco)
 	svcAdmin, err := servicos.NovoServicoAdministradorGeral(repoAdmin, autenticador)
 	if err != nil {
 		banco.Close()
@@ -65,15 +66,16 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 	svcPosto := servicos.NovoServicoPosto(repoPosto, repoRede)
-	svcCampanha := servicos.NovoServicoCampanha(repoCampanha, repoRede)
-	svcVoucherCompra := servicos.NovoServicoVoucherCompra(repoVoucherCompra, svcCampanha, repoMercadoPagoGateway, repoRede, cfg)
+	svcCampanha := servicos.NovoServicoCampanha(repoCampanha, repoRede, repoCombustivelRede)
+	svcVoucherCompra := servicos.NovoServicoVoucherCompra(repoVoucherCompra, svcCampanha, repoMercadoPagoGateway, repoRede, repoCombustivelRede, cfg)
+	svcCombustivelRede := servicos.NovoServicoCombustivelRede(repoCombustivelRede, repoRede)
 	svcPremio := servicos.NovoServicoPremio(repoPremio, repoRede)
 	if err := bootstrapAdminPadrao(cfg, svcAdmin); err != nil {
 		banco.Close()
 		return nil, err
 	}
 
-	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, cfg)
+	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, cfg)
 
 	muxPrincipal := http.NewServeMux()
 	mwGlobal := []middlewares.Middleware{

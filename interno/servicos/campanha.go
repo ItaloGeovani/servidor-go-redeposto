@@ -33,6 +33,9 @@ type CriarCampanhaInput struct {
 	ValorDesconto         float64
 	ValorMinimoCompra     float64
 	MaxUsosPorCliente     *int
+	LitrosMin             *float64
+	LitrosMax             *float64
+	IDsCombustiveisRede   []string
 }
 
 type AtualizarCampanhaInput struct {
@@ -53,6 +56,9 @@ type AtualizarCampanhaInput struct {
 	ValorDesconto       float64
 	ValorMinimoCompra   float64
 	MaxUsosPorCliente   *int
+	LitrosMin           *float64
+	LitrosMax           *float64
+	IDsCombustiveisRede []string
 }
 
 type campanhaRepo interface {
@@ -65,10 +71,11 @@ type campanhaRepo interface {
 type servicoCampanha struct {
 	repo     campanhaRepo
 	repoRede repositorios.RedeRepositorio
+	repoComb repositorios.CombustivelRedeRepositorio
 }
 
-func NovoServicoCampanha(repo campanhaRepo, repoRede repositorios.RedeRepositorio) ServicoCampanha {
-	return &servicoCampanha{repo: repo, repoRede: repoRede}
+func NovoServicoCampanha(repo campanhaRepo, repoRede repositorios.RedeRepositorio, repoComb repositorios.CombustivelRedeRepositorio) ServicoCampanha {
+	return &servicoCampanha{repo: repo, repoRede: repoRede, repoComb: repoComb}
 }
 
 func validarURLImagem(s string) bool {
@@ -107,12 +114,10 @@ func normalizarModalidade(s string) string {
 
 func normalizarBase(s string) string {
 	s = strings.ToUpper(strings.TrimSpace(s))
-	switch s {
-	case modelos.BaseDescontoLitro, modelos.BaseDescontoUnidade:
-		return s
-	default:
-		return modelos.BaseDescontoValorCompra
+	if s == modelos.BaseDescontoLitro {
+		return modelos.BaseDescontoLitro
 	}
+	return modelos.BaseDescontoValorCompra
 }
 
 func validarDescontoEUso(
@@ -151,11 +156,11 @@ func validarDescontoEUso(
 		return false
 	}
 	switch base {
-	case modelos.BaseDescontoValorCompra, modelos.BaseDescontoLitro, modelos.BaseDescontoUnidade:
+	case modelos.BaseDescontoValorCompra, modelos.BaseDescontoLitro:
+		return true
 	default:
 		return false
 	}
-	return true
 }
 
 func (s *servicoCampanha) ListarPorRedeID(idRede string) ([]*modelos.Campanha, error) {
@@ -169,6 +174,49 @@ func (s *servicoCampanha) ListarPorRedeID(idRede string) ([]*modelos.Campanha, e
 	return s.repo.ListarPorRedeID(idRede)
 }
 
+func baseDescontoSolicitadaBruta(s string) string {
+	return strings.ToUpper(strings.TrimSpace(s))
+}
+
+func dedupIDsCombustiveis(ids []string) []string {
+	seen := make(map[string]struct{})
+	var out []string
+	for _, raw := range ids {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func (s *servicoCampanha) validarCombustiveisAtivosNaRede(idRede string, ids []string) error {
+	if len(ids) == 0 {
+		return ErrDadosInvalidos
+	}
+	todos, err := s.repoComb.ListarPorRede(idRede)
+	if err != nil {
+		return err
+	}
+	ativos := make(map[string]struct{}, len(todos))
+	for _, c := range todos {
+		if c != nil && c.Ativo {
+			ativos[c.ID] = struct{}{}
+		}
+	}
+	for _, id := range ids {
+		if _, ok := ativos[id]; !ok {
+			return ErrDadosInvalidos
+		}
+	}
+	return nil
+}
+
 func (s *servicoCampanha) Criar(sessaoCriador string, in CriarCampanhaInput) (*modelos.Campanha, error) {
 	in.IDRede = strings.TrimSpace(in.IDRede)
 	in.Nome = strings.TrimSpace(in.Nome)
@@ -176,11 +224,35 @@ func (s *servicoCampanha) Criar(sessaoCriador string, in CriarCampanhaInput) (*m
 	in.Descricao = strings.TrimSpace(in.Descricao)
 	in.ImagemURL = strings.TrimSpace(in.ImagemURL)
 	in.IDPosto = strings.TrimSpace(in.IDPosto)
+	in.ValidaNoApp, in.ValidaNoPostoFisico = true, false
+	if baseDescontoSolicitadaBruta(in.BaseDesconto) == modelos.BaseDescontoUnidade {
+		return nil, ErrDadosInvalidos
+	}
 	mod := normalizarModalidade(in.ModalidadeDesconto)
 	base := normalizarBase(in.BaseDesconto)
 	valor := in.ValorDesconto
 	if mod == modelos.ModalidadeDescontoNenhum {
 		valor = 0
+	}
+	var litMinPtr, litMaxPtr *float64
+	idsComb := dedupIDsCombustiveis(in.IDsCombustiveisRede)
+	if base == modelos.BaseDescontoLitro {
+		if mod == modelos.ModalidadeDescontoNenhum {
+			return nil, ErrDadosInvalidos
+		}
+		if in.LitrosMin == nil || in.LitrosMax == nil {
+			return nil, ErrDadosInvalidos
+		}
+		if *in.LitrosMin <= 0 || *in.LitrosMax < *in.LitrosMin {
+			return nil, ErrDadosInvalidos
+		}
+		if err := s.validarCombustiveisAtivosNaRede(in.IDRede, idsComb); err != nil {
+			return nil, err
+		}
+		litMinPtr = in.LitrosMin
+		litMaxPtr = in.LitrosMax
+	} else {
+		idsComb = nil
 	}
 
 	if in.IDRede == "" || in.Nome == "" {
@@ -236,6 +308,9 @@ func (s *servicoCampanha) Criar(sessaoCriador string, in CriarCampanhaInput) (*m
 		ValorDesconto:        valor,
 		ValorMinimoCompra:    in.ValorMinimoCompra,
 		MaxUsosPorCliente:    in.MaxUsosPorCliente,
+		LitrosMin:            litMinPtr,
+		LitrosMax:            litMaxPtr,
+		IDsCombustiveisRede:  idsComb,
 	}
 	if err := s.repo.Criar(sessaoCriador, c); err != nil {
 		return nil, err
@@ -251,11 +326,35 @@ func (s *servicoCampanha) Atualizar(in AtualizarCampanhaInput) error {
 	in.Descricao = strings.TrimSpace(in.Descricao)
 	in.ImagemURL = strings.TrimSpace(in.ImagemURL)
 	in.IDPosto = strings.TrimSpace(in.IDPosto)
+	in.ValidaNoApp, in.ValidaNoPostoFisico = true, false
+	if baseDescontoSolicitadaBruta(in.BaseDesconto) == modelos.BaseDescontoUnidade {
+		return ErrDadosInvalidos
+	}
 	mod := normalizarModalidade(in.ModalidadeDesconto)
 	base := normalizarBase(in.BaseDesconto)
 	valor := in.ValorDesconto
 	if mod == modelos.ModalidadeDescontoNenhum {
 		valor = 0
+	}
+	var litMinPtr, litMaxPtr *float64
+	idsComb := dedupIDsCombustiveis(in.IDsCombustiveisRede)
+	if base == modelos.BaseDescontoLitro {
+		if mod == modelos.ModalidadeDescontoNenhum {
+			return ErrDadosInvalidos
+		}
+		if in.LitrosMin == nil || in.LitrosMax == nil {
+			return ErrDadosInvalidos
+		}
+		if *in.LitrosMin <= 0 || *in.LitrosMax < *in.LitrosMin {
+			return ErrDadosInvalidos
+		}
+		if err := s.validarCombustiveisAtivosNaRede(in.IDRede, idsComb); err != nil {
+			return err
+		}
+		litMinPtr = in.LitrosMin
+		litMaxPtr = in.LitrosMax
+	} else {
+		idsComb = nil
 	}
 
 	if in.ID == "" || in.IDRede == "" || in.Nome == "" {
@@ -295,23 +394,26 @@ func (s *servicoCampanha) Atualizar(in AtualizarCampanhaInput) error {
 	}
 
 	c := &modelos.Campanha{
-		ID:                   in.ID,
-		IDRede:               in.IDRede,
-		Nome:                 in.Nome,
-		Titulo:               in.Titulo,
-		Descricao:            in.Descricao,
-		ImagemURL:            in.ImagemURL,
-		IDPosto:              in.IDPosto,
-		Status:               in.Status,
-		VigenciaInicio:       in.VigenciaInicio,
-		VigenciaFim:          in.VigenciaFim,
-		ValidaNoApp:          in.ValidaNoApp,
-		ValidaNoPostoFisico:  in.ValidaNoPostoFisico,
-		ModalidadeDesconto:   mod,
-		BaseDesconto:         base,
-		ValorDesconto:        valor,
-		ValorMinimoCompra:    in.ValorMinimoCompra,
-		MaxUsosPorCliente:    in.MaxUsosPorCliente,
+		ID:                  in.ID,
+		IDRede:              in.IDRede,
+		Nome:                in.Nome,
+		Titulo:              in.Titulo,
+		Descricao:           in.Descricao,
+		ImagemURL:           in.ImagemURL,
+		IDPosto:             in.IDPosto,
+		Status:              in.Status,
+		VigenciaInicio:      in.VigenciaInicio,
+		VigenciaFim:         in.VigenciaFim,
+		ValidaNoApp:         in.ValidaNoApp,
+		ValidaNoPostoFisico: in.ValidaNoPostoFisico,
+		ModalidadeDesconto:  mod,
+		BaseDesconto:        base,
+		ValorDesconto:       valor,
+		ValorMinimoCompra:   in.ValorMinimoCompra,
+		MaxUsosPorCliente:   in.MaxUsosPorCliente,
+		LitrosMin:           litMinPtr,
+		LitrosMax:           litMaxPtr,
+		IDsCombustiveisRede: idsComb,
 	}
 	return s.repo.Atualizar(c)
 }

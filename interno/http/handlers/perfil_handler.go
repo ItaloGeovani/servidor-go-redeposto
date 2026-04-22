@@ -18,13 +18,22 @@ func (h *Handlers) PerfilLogado(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"id_usuario":    usuario.IDUsuario,
 		"nome_completo": usuario.NomeCompleto,
 		"id_rede":       usuario.IDRede,
 		"papel":         usuario.Papel,
 		"request_id":    middlewares.ObterRequestID(r.Context()),
-	})
+	}
+	email, cpf, err := h.usuarioRedeService.EmailECPFPorUsuarioRede(usuario.IDUsuario, usuario.IDRede)
+	if err == nil {
+		out["email"] = email
+		out["cpf"] = cpf
+	} else {
+		out["email"] = ""
+		out["cpf"] = ""
+	}
+	utils.ResponderJSON(w, http.StatusOK, out)
 }
 
 // ExcluirContaClienteApp DELETE /v1/eu/conta — encerra conta do cliente (app); anonimiza dados.
