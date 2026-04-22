@@ -89,6 +89,12 @@ func (r *redeMemoria) Criar(rede *modelos.Rede) error {
 	if copia.MoedaVirtualCotacao <= 0 {
 		copia.MoedaVirtualCotacao = 1
 	}
+	if copia.VoucherDiasValidadeResgate < 1 {
+		copia.VoucherDiasValidadeResgate = 7
+	}
+	if copia.VoucherMinutosExpiraPagamentoPix < 5 {
+		copia.VoucherMinutosExpiraPagamentoPix = 30
+	}
 	now := time.Now().UTC()
 	copia.CriadoEm = now
 	copia.AtualizadoEm = now

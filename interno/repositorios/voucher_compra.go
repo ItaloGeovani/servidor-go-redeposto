@@ -1,0 +1,57 @@
+package repositorios
+
+import (
+	"errors"
+	"time"
+
+	"gaspass-servidor/interno/modelos"
+)
+
+var ErrVoucherCompraNaoEncontrado = errors.New("voucher compra nao encontrado")
+
+// VoucherCompraRegistro linha de voucher_compras.
+type VoucherCompraRegistro struct {
+	ID                  string     `json:"id"`
+	RedeID              string     `json:"rede_id"`
+	UsuarioID           string     `json:"usuario_id"`
+	CampanhaID          *string    `json:"id_campanha,omitempty"`
+	ValorSolicitado     float64    `json:"valor_solicitado"`
+	DescontoAplicado    float64    `json:"desconto_aplicado"`
+	ValorFinal          float64    `json:"valor_final"`
+	Status              string     `json:"status"`
+	MpPaymentID         *int64     `json:"mp_payment_id,omitempty"`
+	ReferenciaPagamento *string   `json:"referencia_pagamento,omitempty"`
+	CodigoResgate       *string    `json:"codigo_resgate,omitempty"`
+	ExpiraPagamento     *time.Time `json:"expira_pagamento_em,omitempty"`
+	ExpiraResgate       *time.Time `json:"expira_resgate_em,omitempty"`
+	CriadoEm            time.Time  `json:"criado_em"`
+	AtualizadoEm        time.Time  `json:"atualizado_em"`
+}
+
+// VoucherCompraRepositorio persistência de compras de voucher no app.
+type VoucherCompraRepositorio interface {
+	// CriarPendenteComPix grava após criação do payment no MP (um único INSERT).
+	CriarPendenteComPix(x *VoucherCompraRegistro) error
+	BuscarPorID(id, usuarioID, redeID string) (*VoucherCompraRegistro, error)
+	ListarDoUsuario(redeID, usuarioID string, limite int) ([]*VoucherCompraRegistro, error)
+	ContarUsosCampanhaUsuario(campanhaID, usuarioID, redeID string) (int, error)
+	BuscarPorIDRede(id, redeID string) (*VoucherCompraRegistro, error)
+	AtivarPagamentoAprovado(id, redeID, codigo string, expiraResgate time.Time) error
+}
+
+// Filtra campanha elegível (mesma lógica pública + pertence à rede).
+func CampanhaElegivelApp(c *modelos.Campanha, idRede string, agora time.Time) bool {
+	if c == nil || c.IDRede != idRede {
+		return false
+	}
+	if c.Status != modelos.StatusCampanhaAtiva || !c.ValidaNoApp {
+		return false
+	}
+	if c.VigenciaInicio != nil && agora.Before(*c.VigenciaInicio) {
+		return false
+	}
+	if c.VigenciaFim != nil && agora.After(*c.VigenciaFim) {
+		return false
+	}
+	return true
+}

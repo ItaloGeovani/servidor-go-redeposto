@@ -44,6 +44,12 @@ type reqEditarMoedaVirtualRede struct {
 	MoedaVirtualCotacao float64 `json:"moeda_virtual_cotacao"`
 }
 
+// reqEditarVoucherConfigRede PATCH gestor: ao menos um campo; valores opcionais mantêm o atual.
+type reqEditarVoucherConfigRede struct {
+	Dias    *int `json:"voucher_dias_validade_resgate"`
+	Minutos *int `json:"voucher_minutos_expira_pagamento_pix"`
+}
+
 func (h *Handlers) ListarRedesDev(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")

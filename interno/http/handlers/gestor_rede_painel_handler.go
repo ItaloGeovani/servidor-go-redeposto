@@ -491,6 +491,43 @@ func (h *Handlers) EditarMoedaVirtualMinhaRedeGestor(w http.ResponseWriter, r *h
 	})
 }
 
+// EditarVoucherConfigMinhaRedeGestor PATCH /v1/gestor-rede/dev/redes/config-voucher
+func (h *Handlers) EditarVoucherConfigMinhaRedeGestor(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+	idRede, ok := h.idRedeDaSessao(w, r)
+	if !ok {
+		return
+	}
+	var req reqEditarVoucherConfigRede
+	if err := utils.DecodificarJSON(r, &req); err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, "payload invalido")
+		return
+	}
+	rede, err := h.redeService.EditarVoucherConfig(servicos.EditarVoucherConfigRedeInput{
+		ID:      idRede,
+		Dias:    req.Dias,
+		Minutos: req.Minutos,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, "informe ao menos um campo; dias 1-365; minutos PIX 5-10080")
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, err.Error())
+		default:
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao atualizar configuracao de voucher")
+		}
+		return
+	}
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"mensagem": "configuracao de voucher atualizada",
+		"rede":     rede,
+	})
+}
+
 func (h *Handlers) ListarUsuariosRedeGestor(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")

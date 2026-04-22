@@ -15,7 +15,11 @@ type Rede struct {
 	DiaCobranca         int       `json:"dia_cobranca"`
 	MoedaVirtualNome    string    `json:"moeda_virtual_nome"`
 	MoedaVirtualCotacao float64   `json:"moeda_virtual_cotacao"`
-	Ativa               bool      `json:"ativa"`
-	CriadoEm            time.Time `json:"criado_em"`
-	AtualizadoEm        time.Time `json:"atualizado_em"`
+	// VoucherDiasValidadeResgate dias para usar o saldo no posto após o PIX aprovado.
+	VoucherDiasValidadeResgate int `json:"voucher_dias_validade_resgate"`
+	// VoucherMinutosExpiraPagamentoPix tempo para pagar a cobrança PIX antes de expirar.
+	VoucherMinutosExpiraPagamentoPix int       `json:"voucher_minutos_expira_pagamento_pix"`
+	Ativa                            bool      `json:"ativa"`
+	CriadoEm                         time.Time `json:"criado_em"`
+	AtualizadoEm                     time.Time `json:"atualizado_em"`
 }

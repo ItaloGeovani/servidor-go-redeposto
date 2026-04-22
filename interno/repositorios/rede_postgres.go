@@ -37,6 +37,8 @@ SELECT
   COALESCE(dia_cobranca, 0),
   moeda_virtual_nome,
   moeda_virtual_cotacao::float8,
+  COALESCE(voucher_dias_validade_resgate, 7),
+  COALESCE(voucher_minutos_expira_pagamento_pix, 30),
   COALESCE(ativa, true),
   criado_em,
   atualizado_em
@@ -82,6 +84,8 @@ SELECT
   COALESCE(dia_cobranca, 0),
   moeda_virtual_nome,
   moeda_virtual_cotacao::float8,
+  COALESCE(voucher_dias_validade_resgate, 7),
+  COALESCE(voucher_minutos_expira_pagamento_pix, 30),
   COALESCE(ativa, true),
   criado_em,
   atualizado_em
@@ -170,6 +174,8 @@ SELECT
   COALESCE(dia_cobranca, 0),
   moeda_virtual_nome,
   moeda_virtual_cotacao::float8,
+  COALESCE(voucher_dias_validade_resgate, 7),
+  COALESCE(voucher_minutos_expira_pagamento_pix, 30),
   COALESCE(ativa, true),
   criado_em,
   atualizado_em
@@ -205,6 +211,8 @@ SET
   dia_cobranca = $12,
   moeda_virtual_nome = $13,
   moeda_virtual_cotacao = $14,
+  voucher_dias_validade_resgate = $15,
+  voucher_minutos_expira_pagamento_pix = $16,
   atualizado_em = NOW()
 WHERE id = $1
 RETURNING atualizado_em`
@@ -231,6 +239,8 @@ RETURNING atualizado_em`
 		rede.DiaCobranca,
 		strings.TrimSpace(rede.MoedaVirtualNome),
 		rede.MoedaVirtualCotacao,
+		rede.VoucherDiasValidadeResgate,
+		rede.VoucherMinutosExpiraPagamentoPix,
 	).Scan(&rede.AtualizadoEm)
 	if err != nil {
 		return nil, mapearErroRedePostgres(err)
@@ -263,6 +273,8 @@ func scanRede(s scannerRede) (*modelos.Rede, error) {
 		&rede.DiaCobranca,
 		&rede.MoedaVirtualNome,
 		&rede.MoedaVirtualCotacao,
+		&rede.VoucherDiasValidadeResgate,
+		&rede.VoucherMinutosExpiraPagamentoPix,
 		&rede.Ativa,
 		&rede.CriadoEm,
 		&rede.AtualizadoEm,

@@ -20,6 +20,7 @@ type Handlers struct {
 	appMobileRepo      repositorios.AppMobileConfigRepositorio
 	appCardsRepo       repositorios.AppCardsRedeRepositorio
 	mpGatewayRepo      repositorios.MercadoPagoGatewayRepositorio
+	voucherCompraSvc   *servicos.ServicoVoucherCompra
 	cfg                config.Config
 }
 
@@ -37,6 +38,7 @@ func Novos(
 	appMobileRepo repositorios.AppMobileConfigRepositorio,
 	appCardsRepo repositorios.AppCardsRedeRepositorio,
 	mpGatewayRepo repositorios.MercadoPagoGatewayRepositorio,
+	voucherCompraSvc *servicos.ServicoVoucherCompra,
 	cfg config.Config,
 ) *Handlers {
 	return &Handlers{
@@ -53,6 +55,7 @@ func Novos(
 		appMobileRepo:      appMobileRepo,
 		appCardsRepo:       appCardsRepo,
 		mpGatewayRepo:      mpGatewayRepo,
+		voucherCompraSvc:   voucherCompraSvc,
 		cfg:                cfg,
 	}
 }

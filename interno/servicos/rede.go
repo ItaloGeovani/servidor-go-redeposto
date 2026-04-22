@@ -16,6 +16,7 @@ type ServicoRede interface {
 	Criar(input CriarRedeInput) (*modelos.Rede, error)
 	Editar(input EditarRedeInput) (*modelos.Rede, error)
 	EditarMoedaVirtual(input EditarMoedaVirtualRedeInput) (*modelos.Rede, error)
+	EditarVoucherConfig(input EditarVoucherConfigRedeInput) (*modelos.Rede, error)
 	Ativar(id string) (*modelos.Rede, error)
 	Desativar(id string) (*modelos.Rede, error)
 }
@@ -47,6 +48,13 @@ type EditarMoedaVirtualRedeInput struct {
 	ID                  string
 	MoedaVirtualNome    string
 	MoedaVirtualCotacao float64
+}
+
+// EditarVoucherConfigRedeInput prazos de voucher (app cliente). Campos nulos mantêm o valor atual.
+type EditarVoucherConfigRedeInput struct {
+	ID      string
+	Dias    *int // 1–365, dias para usar o saldo no posto após PIX aprovado
+	Minutos *int // 5–10080, janela para concluir o pagamento PIX
 }
 
 type servicoRede struct {
@@ -155,6 +163,31 @@ func (s *servicoRede) EditarMoedaVirtual(input EditarMoedaVirtualRedeInput) (*mo
 	return s.repo.Atualizar(input.ID, func(r *modelos.Rede) error {
 		r.MoedaVirtualNome = input.MoedaVirtualNome
 		r.MoedaVirtualCotacao = input.MoedaVirtualCotacao
+		return nil
+	})
+}
+
+func (s *servicoRede) EditarVoucherConfig(input EditarVoucherConfigRedeInput) (*modelos.Rede, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	if input.ID == "" {
+		return nil, ErrDadosInvalidos
+	}
+	if input.Dias == nil && input.Minutos == nil {
+		return nil, ErrDadosInvalidos
+	}
+	return s.repo.Atualizar(input.ID, func(r *modelos.Rede) error {
+		if input.Dias != nil {
+			if *input.Dias < 1 || *input.Dias > 365 {
+				return ErrDadosInvalidos
+			}
+			r.VoucherDiasValidadeResgate = *input.Dias
+		}
+		if input.Minutos != nil {
+			if *input.Minutos < 5 || *input.Minutos > 10080 {
+				return ErrDadosInvalidos
+			}
+			r.VoucherMinutosExpiraPagamentoPix = *input.Minutos
+		}
 		return nil
 	})
 }

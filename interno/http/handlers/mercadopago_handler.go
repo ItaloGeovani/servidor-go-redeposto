@@ -101,6 +101,9 @@ func (h *Handlers) MercadoPagoWebhookPublico(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if h.voucherCompraSvc != nil {
+		h.voucherCompraSvc.ProcessarPagamentoAprovadoWebhook(idRede, pay)
+	}
 	servicos.LogPagamentoAprovadoWebhook(idRede, paymentID, pay.ExternalReference, pay.Status)
 	w.WriteHeader(http.StatusOK)
 }
