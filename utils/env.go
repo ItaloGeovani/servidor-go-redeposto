@@ -26,3 +26,12 @@ func ObterEnvInt(chave string, padrao int) int {
 	}
 	return conv
 }
+
+// ObterEnvSimNao interpreta 1, true, sim, yes, on (minusculo) como verdade; vazio usa [padrao].
+func ObterEnvSimNao(chave string, padrao bool) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(chave)))
+	if v == "" {
+		return padrao
+	}
+	return v == "1" || v == "true" || v == "sim" || v == "yes" || v == "on"
+}

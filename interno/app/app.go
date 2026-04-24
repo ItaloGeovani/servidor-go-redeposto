@@ -57,8 +57,27 @@ func verificarCaminhoContaFCM(cfg *config.Config) error {
 		log.Printf("fcm: credenciais OK: %q (%d bytes)", abs, info.Size())
 		return nil
 	}
+	if utils.ObterEnvSimNao("FCM_PERMITIR_ARRANQUE_SEM_CREDENCIAL", false) {
+		log.Printf("fcm: ATENCAO: ficheiro nao encontrado entre %d candidatos; push desativado. Importe o json no servidor e reinicie, ou ajuste FCM_SERVICE_ACCOUNT_PATH.", len(cands))
+		for i, c := range cands {
+			if i >= 12 {
+				break
+			}
+			log.Printf("fcm:   candidato %d: %q", i+1, c)
+		}
+		cfg.FcmCaminhoContaServico = ""
+		return nil
+	}
+	linhas := make([]string, 0, len(cands))
+	for i, c := range cands {
+		if i >= 20 {
+			linhas = append(linhas, fmt.Sprintf("... (+%d)", len(cands)-i))
+			break
+		}
+		linhas = append(linhas, c)
+	}
 	b := filepath.Base(p)
-	return fmt.Errorf("fcm: ficheiro da conta de servico nao encontrado. Tentou %d caminhos; coloque %q na pasta da API no servidor (ao lado do executavel) ou defina FCM_BASE_DIR. Ultimo FCM_SERVICE_ACCOUNT_PATH=%q", len(cands), b, p)
+	return fmt.Errorf("fcm: ficheiro da conta de servico nao encontrado em %d caminhos testados. Procurou-se %q. Caminhos: %s. Solucao: carregar o .json nessa pasta, ou FCM_BASE_DIR, ou FCM_PERMITIR_ARRANQUE_SEM_CREDENCIAL=1 para subir a API sem push", len(cands), b, strings.Join(linhas, " | "))
 }
 
 func candidatosCaminhoFcm(p string) []string {
@@ -82,27 +101,43 @@ func candidatosCaminhoFcm(p string) []string {
 		seen[s] = struct{}{}
 		out = append(out, s)
 	}
+	nome := filepath.Base(p)
 	add(p)
 	if !filepath.IsAbs(p) {
 		if w, e := os.Getwd(); e == nil {
 			add(filepath.Join(w, p))
 		}
 	}
-	nome := filepath.Base(p)
-	// 3) mesmo nome de ficheiro na pasta do executavel (typico: json na raiz do deploy, bin noutro sitio)
+	// CWD: subir diretorios com o nome do ficheiro (json noutro nivel que o processo)
+	if w, e := os.Getwd(); e == nil {
+		candidatoSubirPastas(filepath.Clean(w), nome, add)
+	}
+	// executavel: subir a partir da pasta do binario
 	if ex, e := os.Executable(); e == nil {
 		ex = filepath.Clean(ex)
 		dirEx := filepath.Dir(ex)
 		if !filepath.IsAbs(p) {
 			add(filepath.Join(dirEx, p))
 		}
-		add(filepath.Join(dirEx, nome))
-	}
-	// 4) so o nome do ficheiro no CWD
-	if w, e := os.Getwd(); e == nil {
-		add(filepath.Join(w, nome))
+		candidatoSubirPastas(dirEx, nome, add)
 	}
 	return out
+}
+
+// candidatoSubirPastas adiciona dir/nome, parent/nome, ... (ate 7 passos) para achar o json noutro nivel da arvore.
+func candidatoSubirPastas(dir0, nome string, add func(string)) {
+	d := dir0
+	for i := 0; i < 7; i++ {
+		if d == "" {
+			return
+		}
+		add(filepath.Join(d, nome))
+		parent := filepath.Dir(d)
+		if parent == d {
+			return
+		}
+		d = parent
+	}
 }
 
 func Nova() (*Aplicacao, error) {
