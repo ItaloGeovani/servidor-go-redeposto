@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"log"
 	"math"
 	"slices"
@@ -12,6 +13,7 @@ import (
 
 	"gaspass-servidor/interno/config"
 	"gaspass-servidor/interno/modelos"
+	"gaspass-servidor/interno/notificacoes"
 	"gaspass-servidor/interno/repositorios"
 	"github.com/google/uuid"
 	"github.com/mercadopago/sdk-go/pkg/payment"
@@ -37,6 +39,7 @@ type ServicoVoucherCompra struct {
 	combustive repositorios.CombustivelRedeRepositorio
 	mpGW       repositorios.MercadoPagoGatewayRepositorio
 	rede       repositorios.RedeRepositorio
+	fcm        repositorios.FCMListador
 	cfg        config.Config
 }
 
@@ -46,9 +49,10 @@ func NovoServicoVoucherCompra(
 	mp repositorios.MercadoPagoGatewayRepositorio,
 	rede repositorios.RedeRepositorio,
 	comb repositorios.CombustivelRedeRepositorio,
+	fcm repositorios.FCMListador,
 	cfg config.Config,
 ) *ServicoVoucherCompra {
-	return &ServicoVoucherCompra{repo: repo, campanha: camp, mpGW: mp, rede: rede, combustive: comb, cfg: cfg}
+	return &ServicoVoucherCompra{repo: repo, campanha: camp, mpGW: mp, rede: rede, combustive: comb, fcm: fcm, cfg: cfg}
 }
 
 func (s *ServicoVoucherCompra) duracaoPagamentoPix(idRede string) time.Duration {
@@ -369,6 +373,8 @@ func (s *ServicoVoucherCompra) ProcessarPagamentoAprovadoWebhook(idRede string, 
 		lastErr = s.repo.AtivarPagamentoAprovado(idCompra, idRede, cod, s.expiraResgateAposPagamentoAprovado(idRede, time.Now()))
 		if lastErr == nil {
 			log.Printf("voucher webhook: ativado id=%s codigo=%s", idCompra, cod)
+			uid := strings.TrimSpace(vc.UsuarioID)
+			go s.notificarPushVoucherAprovado(uid, idCompra, cod, vc.ValorFinal)
 			return
 		}
 		if strings.Contains(lastErr.Error(), "nenhuma linha ativada") {
@@ -377,6 +383,39 @@ func (s *ServicoVoucherCompra) ProcessarPagamentoAprovadoWebhook(idRede string, 
 		cod = gerarCodigoResgate()
 	}
 	log.Printf("voucher webhook: falha ativar id=%s: %v", idCompra, lastErr)
+}
+
+func (s *ServicoVoucherCompra) notificarPushVoucherAprovado(idUsuario, idCompra, codigo string, valor float64) {
+	if s.fcm == nil {
+		return
+	}
+	cred := strings.TrimSpace(s.cfg.FcmCaminhoContaServico)
+	if cred == "" {
+		return
+	}
+	if strings.TrimSpace(idUsuario) == "" {
+		return
+	}
+	tokens, err := s.fcm.ListarTokensFCMPorUsuarioID(idUsuario)
+	if err != nil {
+		log.Printf("fcm: listar tokens usuario=%s: %v", idUsuario, err)
+		return
+	}
+	if len(tokens) == 0 {
+		return
+	}
+	v := formatarBRL2(valor)
+	xctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	notificacoes.EnviarVoucherAprovado(xctx, cred, tokens, idCompra, codigo, v)
+}
+
+func formatarBRL2(v float64) string {
+	s := fmt.Sprintf("%.2f", v)
+	if i := strings.IndexByte(s, '.'); i >= 0 {
+		return s[:i] + "," + s[i+1:]
+	}
+	return s
 }
 
 func parseRefVcompra(ref string) (string, bool) {

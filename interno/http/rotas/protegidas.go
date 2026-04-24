@@ -17,6 +17,8 @@ func RegistrarProtegidas(muxPrincipal *http.ServeMux, h *handlers.Handlers, aut 
 	muxProtegida.Handle("/v1/eu/vouchers/pagar", http.HandlerFunc(h.PostVoucherCompraPagar))
 	muxProtegida.Handle("/v1/eu/vouchers", http.HandlerFunc(h.GetVoucherCompras))
 	muxProtegida.Handle("/v1/eu/vouchers/detalhe", http.HandlerFunc(h.GetVoucherCompraDetalhe))
+	muxProtegida.Handle("/v1/eu/push/fcm", http.HandlerFunc(h.PostRegistrarTokenFCM))
+	muxProtegida.Handle("/v1/eu/push/fcm/teste", http.HandlerFunc(h.PostFcmTeste))
 
 	chain := append([]middlewares.Middleware{}, mws...)
 	chain = append(chain, middlewares.ExigirAutenticacao(aut))

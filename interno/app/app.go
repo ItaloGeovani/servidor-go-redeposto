@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"gaspass-servidor/interno/config"
@@ -27,8 +30,35 @@ type Aplicacao struct {
 	banco    *sql.DB
 }
 
+// verificarCaminhoContaFCM confirma no arranque que o JSON existe e e ficheiro (log no terminal).
+// Se FCM_SERVICE_ACCOUNT_PATH estiver vazio, nao e erro; push fica desativado.
+// Se estiver preenchido e o ficheiro nao abrir, o servidor nao inicia.
+func verificarCaminhoContaFCM(cfg config.Config) error {
+	p := strings.TrimSpace(cfg.FcmCaminhoContaServico)
+	if p == "" {
+		log.Print("fcm: FCM_SERVICE_ACCOUNT_PATH nao definido; envio de push desativado")
+		return nil
+	}
+	abs, errAbs := filepath.Abs(p)
+	if errAbs != nil {
+		abs = p
+	}
+	info, err := os.Stat(p)
+	if err != nil {
+		return fmt.Errorf("fcm: ficheiro da conta de servico inacessivel %q: %w (dica: use caminho absoluto se o CWD nao for a pasta do projeto)", p, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("fcm: o caminho %q e uma pasta, nao o json da conta de servico", p)
+	}
+	log.Printf("fcm: credenciais encontradas: %q (%d bytes) [abs: %s]", p, info.Size(), abs)
+	return nil
+}
+
 func Nova() (*Aplicacao, error) {
 	cfg := config.Carregar()
+	if err := verificarCaminhoContaFCM(cfg); err != nil {
+		return nil, err
+	}
 	banco, err := abrirBanco()
 	if err != nil {
 		return nil, err
@@ -67,7 +97,7 @@ func Nova() (*Aplicacao, error) {
 	}
 	svcPosto := servicos.NovoServicoPosto(repoPosto, repoRede)
 	svcCampanha := servicos.NovoServicoCampanha(repoCampanha, repoRede, repoCombustivelRede)
-	svcVoucherCompra := servicos.NovoServicoVoucherCompra(repoVoucherCompra, svcCampanha, repoMercadoPagoGateway, repoRede, repoCombustivelRede, cfg)
+	svcVoucherCompra := servicos.NovoServicoVoucherCompra(repoVoucherCompra, svcCampanha, repoMercadoPagoGateway, repoRede, repoCombustivelRede, repoUsuarioRede, cfg)
 	svcCombustivelRede := servicos.NovoServicoCombustivelRede(repoCombustivelRede, repoRede)
 	svcPremio := servicos.NovoServicoPremio(repoPremio, repoRede)
 	if err := bootstrapAdminPadrao(cfg, svcAdmin); err != nil {

@@ -267,7 +267,65 @@ WHERE id = $3::uuid AND rede_id = $4::uuid AND papel = 'cliente'::papel_usuario`
 	if n != 1 {
 		return ErrContaClienteExclusaoNaoAplicada
 	}
+	_, _ = r.db.ExecContext(ctx, `DELETE FROM usuario_fcm_tokens WHERE usuario_id = $1::uuid`, idUsuario)
 	return nil
+}
+
+// UpsertFCMToken regista ou atualiza token FCM; [token] e unico (mesmo aparelho / sessao FCM).
+func (r *usuarioRedePostgres) UpsertFCMToken(idUsuario, token, plataforma string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	idUsuario = strings.TrimSpace(idUsuario)
+	token = strings.TrimSpace(token)
+	plataforma = strings.ToLower(strings.TrimSpace(plataforma))
+	if idUsuario == "" || token == "" || len(token) < 20 {
+		return errors.New("token fcm invalido")
+	}
+	if plataforma != "android" && plataforma != "ios" && plataforma != "web" {
+		return errors.New("plataforma invalida")
+	}
+
+	const q = `
+INSERT INTO usuario_fcm_tokens (usuario_id, token, plataforma, atualizado_em)
+VALUES ($1::uuid, $2, $3, NOW())
+ON CONFLICT (token) DO UPDATE SET
+  usuario_id = EXCLUDED.usuario_id,
+  plataforma = EXCLUDED.plataforma,
+  atualizado_em = NOW()`
+
+	_, err := r.db.ExecContext(ctx, q, idUsuario, token, plataforma)
+	return err
+}
+
+// ListarTokensFCMPorUsuarioID tokens ativos (mais recente primeiro) para notificações.
+func (r *usuarioRedePostgres) ListarTokensFCMPorUsuarioID(idUsuario string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	idUsuario = strings.TrimSpace(idUsuario)
+	if idUsuario == "" {
+		return nil, errors.New("id usuario invalido")
+	}
+	rows, err := r.db.QueryContext(ctx, `
+SELECT token FROM usuario_fcm_tokens
+WHERE usuario_id = $1::uuid
+ORDER BY atualizado_em DESC
+LIMIT 32`, idUsuario)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(t) != "" {
+			out = append(out, t)
+		}
+	}
+	return out, rows.Err()
 }
 
 func mapearErroUsuarioEquipePostgres(err error) error {

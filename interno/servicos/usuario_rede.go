@@ -25,6 +25,10 @@ type ServicoUsuarioRede interface {
 	ExcluirContaClienteApp(idUsuario, idRede string) error
 	// EmailECPFPorUsuarioRede e-mail e CPF cadastrados (app / pagamento).
 	EmailECPFPorUsuarioRede(idUsuario, idRede string) (email string, cpf string, err error)
+	// RegistrarTokenFCM grava o token do Firebase Cloud Messaging (push) para o utilizador.
+	RegistrarTokenFCM(idUsuario, token, plataforma string) error
+	// ListarTokensFCM tokens guardados (para teste de push / envio).
+	ListarTokensFCM(idUsuario string) ([]string, error)
 }
 
 // CriarUsuarioEquipeInput cadastro de gerente de posto ou frentista pelo admin global.
@@ -78,6 +82,8 @@ type usuarioRedePostgresRepo interface {
 	BuscarPorEmailParaLoginPainel(email string) (*repositorios.UsuarioPainelLogin, error)
 	PostoPertenceARede(idPosto, idRede string) (bool, error)
 	EmailECPFPorUsuarioRede(idUsuario, idRede string) (email string, cpf string, err error)
+	UpsertFCMToken(idUsuario, token, plataforma string) error
+	ListarTokensFCMPorUsuarioID(idUsuario string) ([]string, error)
 }
 
 type servicoUsuarioRede struct {
@@ -310,4 +316,19 @@ func (s *servicoUsuarioRede) ExcluirContaClienteApp(idUsuario, idRede string) er
 
 func (s *servicoUsuarioRede) EmailECPFPorUsuarioRede(idUsuario, idRede string) (email string, cpf string, err error) {
 	return s.repoUsuarios.EmailECPFPorUsuarioRede(idUsuario, idRede)
+}
+
+func (s *servicoUsuarioRede) RegistrarTokenFCM(idUsuario, token, plataforma string) error {
+	idUsuario = strings.TrimSpace(idUsuario)
+	if idUsuario == "" {
+		return ErrDadosInvalidos
+	}
+	if plataforma == "" {
+		plataforma = "android"
+	}
+	return s.repoUsuarios.UpsertFCMToken(idUsuario, token, plataforma)
+}
+
+func (s *servicoUsuarioRede) ListarTokensFCM(idUsuario string) ([]string, error) {
+	return s.repoUsuarios.ListarTokensFCMPorUsuarioID(strings.TrimSpace(idUsuario))
 }
