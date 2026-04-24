@@ -105,8 +105,7 @@ func (h *Handlers) PostVoucherCompraPagar(w http.ResponseWriter, r *http.Request
 		utils.ResponderErro(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	qr := pay.PointOfInteraction.TransactionData.QRCode
-	qrB64 := pay.PointOfInteraction.TransactionData.QRCodeBase64
+	qr, qrB64 := servicos.ExtrairQRPixDoPagamento(pay)
 	utils.ResponderJSON(w, http.StatusOK, map[string]any{
 		"compra_id":        reg.ID,
 		"status":            reg.Status,
@@ -116,6 +115,44 @@ func (h *Handlers) PostVoucherCompraPagar(w http.ResponseWriter, r *http.Request
 		"qr_code":          qr,
 		"qr_code_base64":   qrB64,
 		"mp_status":        pay.Status,
+	})
+}
+
+// GetVoucherCompraPixRetomar GET /v1/eu/vouchers/pix-retomar?id= — QR/copia-e-cola a partir de compra ainda pendente (requery MP).
+func (h *Handlers) GetVoucherCompraPixRetomar(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+	u := middlewares.Usuario(r.Context())
+	if u == nil || u.Papel != modelos.PapelCliente {
+		utils.ResponderErro(w, http.StatusForbidden, "apenas clientes")
+		return
+	}
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		utils.ResponderErro(w, http.StatusBadRequest, "informe id")
+		return
+	}
+	if h.voucherCompraSvc == nil {
+		utils.ResponderErro(w, http.StatusServiceUnavailable, "servico indisponivel")
+		return
+	}
+	reg, pay, err := h.voucherCompraSvc.RetomarDadosPixPendente(r.Context(), id, u.IDRede, u.IDUsuario)
+	if err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	qr, qrB64 := servicos.ExtrairQRPixDoPagamento(pay)
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"compra_id":        reg.ID,
+		"status":            reg.Status,
+		"payment_id":        pay.ID,
+		"valor_final":       reg.ValorFinal,
+		"expira_pagamento":  reg.ExpiraPagamento,
+		"qr_code":           qr,
+		"qr_code_base64":   qrB64,
+		"mp_status":         pay.Status,
 	})
 }
 

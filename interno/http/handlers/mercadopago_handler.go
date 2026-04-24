@@ -62,7 +62,8 @@ func (h *Handlers) MercadoPagoWebhookPublico(w http.ResponseWriter, r *http.Requ
 		Action string `json:"action"`
 	}
 	_ = json.Unmarshal(body, &actionWrap)
-	if actionWrap.Action != "" && actionWrap.Action != "payment.updated" {
+	if actionWrap.Action != "" && !strings.HasPrefix(actionWrap.Action, "payment.") {
+		// Ex.: plan, subscription — ignorar
 		w.WriteHeader(http.StatusOK)
 		return
 	}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -56,24 +57,60 @@ func parseMercadoPagoSignatureHeader(xSignature string) (ts, v1 string, ok bool)
 	return ts, v1, ts != "" && v1 != ""
 }
 
-// ExtrairDataIDDoWebhookMercadoPago obtém data.id do JSON (payment id no MP).
+var rePaymentIDemURL = regexp.MustCompile(`/(?:v1/)?payments/(\d+)`)
+
+// ExtrairDataIDDoWebhookMercadoPago obtém o id do pagamento a partir do corpo do webhook (vários formatos do MP).
 func ExtrairDataIDDoWebhookMercadoPago(body []byte) (string, error) {
-	var wrap struct {
-		Data json.RawMessage `json:"data"`
+	if len(body) == 0 {
+		return "", errors.New("corpo vazio")
 	}
-	if err := json.Unmarshal(body, &wrap); err != nil {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(body, &m); err != nil {
 		return "", err
 	}
-	if len(wrap.Data) == 0 {
-		return "", errors.New("campo data ausente")
+	if raw, ok := m["data"]; ok {
+		if id, e := dataRawParaID(raw); e == nil && id != "" {
+			return id, nil
+		}
+	}
+	if raw, ok := m["resource"]; ok {
+		var rs string
+		if err := json.Unmarshal(raw, &rs); err == nil {
+			rs = strings.TrimSpace(rs)
+			if rs != "" {
+				if sub := rePaymentIDemURL.FindStringSubmatch(rs); len(sub) == 2 {
+					return sub[1], nil
+				}
+			}
+		}
+	}
+	return "", errors.New("nao foi possivel obter id do pagamento (data id ou resource)")
+}
+
+func dataRawParaID(raw []byte) (string, error) {
+	raw = []byte(strings.TrimSpace(string(raw)))
+	if len(raw) == 0 || string(raw) == "null" {
+		return "", errors.New("data vazio")
 	}
 	var d struct {
 		ID interface{} `json:"id"`
 	}
-	if err := json.Unmarshal(wrap.Data, &d); err != nil {
-		return "", err
+	if err := json.Unmarshal(raw, &d); err == nil && d.ID != nil {
+		if s, e := normalizarIDMercadoPago(d.ID); e == nil && s != "" {
+			return s, nil
+		}
 	}
-	return normalizarIDMercadoPago(d.ID)
+	var n float64
+	if err := json.Unmarshal(raw, &n); err == nil && n > 0 {
+		return strconv.FormatInt(int64(n), 10), nil
+	}
+	var s2 string
+	if err := json.Unmarshal(raw, &s2); err == nil {
+		if t := strings.TrimSpace(s2); t != "" {
+			return t, nil
+		}
+	}
+	return "", errors.New("data sem id")
 }
 
 func normalizarIDMercadoPago(v interface{}) (string, error) {
@@ -95,6 +132,15 @@ func normalizarIDMercadoPago(v interface{}) (string, error) {
 		}
 		return s, nil
 	}
+}
+
+// ExtrairQRPixDoPagamento lê o EMV (copia e cola) e o QR em base64 da resposta GET /v1/payments/{id}.
+func ExtrairQRPixDoPagamento(pay *payment.Response) (qr, qrB64 string) {
+	if pay == nil {
+		return "", ""
+	}
+	td := pay.PointOfInteraction.TransactionData
+	return td.QRCode, td.QRCodeBase64
 }
 
 // ConsultarPagamentoMercadoPago GET /v1/payments/{id}.

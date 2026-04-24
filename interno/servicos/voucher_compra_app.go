@@ -336,6 +336,51 @@ func (s *ServicoVoucherCompra) PagarComPixInicia(ctx context.Context, idRede, id
 	return reg, res, nil
 }
 
+// RetomarDadosPixPendente reconsulta o payment no MP e devolve o QR (na DB só há mp_payment_id, não a string do QR).
+// Útil para o cliente reabrir o ecrã PIX a partir da lista "aguardando pagamento".
+func (s *ServicoVoucherCompra) RetomarDadosPixPendente(ctx context.Context, idCompra, idRede, idUsuario string) (
+	reg *repositorios.VoucherCompraRegistro, pay *payment.Response, err error,
+) {
+	vc, err := s.repo.BuscarPorID(idCompra, idUsuario, idRede)
+	if err != nil {
+		return nil, nil, err
+	}
+	if vc.Status != "AGUARDANDO_PAGAMENTO" {
+		return nil, nil, errors.New("este voucher nao esta a aguardar pagamento")
+	}
+	if vc.MpPaymentID == nil {
+		return nil, nil, errors.New("pagamento mercado pago nao associado a esta compra")
+	}
+	if vc.ExpiraPagamento != nil && time.Now().After(*vc.ExpiraPagamento) {
+		return nil, nil, errors.New("prazo de pagamento deste pix expirou; gere outro voucher")
+	}
+	creds, err := s.mpGW.BuscarPorRedeID(idRede)
+	if err != nil {
+		if errors.Is(err, repositorios.ErrMercadoPagoGatewayNaoConfigurado) {
+			return nil, nil, errors.New("rede sem mercado pago configurado")
+		}
+		return nil, nil, err
+	}
+	if strings.TrimSpace(creds.AccessToken) == "" {
+		return nil, nil, errors.New("rede sem mp_access_token")
+	}
+	pay, err = ConsultarPagamentoMercadoPago(ctx, creds.AccessToken, int(*vc.MpPaymentID))
+	if err != nil {
+		return nil, nil, err
+	}
+	switch strings.TrimSpace(pay.Status) {
+	case "approved":
+		return nil, nil, errors.New("pagamento ja confirmado; actualize a lista de vouchers")
+	case "rejected", "cancelled", "refunded", "charged_back":
+		return nil, nil, fmt.Errorf("cobranca nao esta pendente (status: %s)", pay.Status)
+	}
+	qr, _ := ExtrairQRPixDoPagamento(pay)
+	if strings.TrimSpace(qr) == "" {
+		return nil, nil, errors.New("qr pix indisponivel; tente gerar outro pagamento no app")
+	}
+	return vc, pay, nil
+}
+
 // ListarMeus do cliente.
 func (s *ServicoVoucherCompra) ListarMeus(rede, usuarioID string) ([]*repositorios.VoucherCompraRegistro, error) {
 	return s.repo.ListarDoUsuario(rede, usuarioID, 80)
