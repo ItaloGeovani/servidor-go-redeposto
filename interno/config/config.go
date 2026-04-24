@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -26,10 +27,14 @@ type Config struct {
 }
 
 func Carregar() Config {
+	fcm := resolverCaminhoContaFCM(
+		strings.TrimSpace(utils.ObterEnv("FCM_SERVICE_ACCOUNT_PATH", utils.ObterEnv("GOOGLE_APPLICATION_CREDENTIALS", ""))),
+		strings.TrimSpace(utils.ObterEnv("FCM_BASE_DIR", "")),
+	)
 	return Config{
-		Ambiente:                utils.ObterEnv("APP_AMBIENTE", "desenvolvimento"),
-		FcmCaminhoContaServico:  strings.TrimSpace(utils.ObterEnv("FCM_SERVICE_ACCOUNT_PATH", utils.ObterEnv("GOOGLE_APPLICATION_CREDENTIALS", ""))),
-		PortaHTTP:               portaHTTP(),
+		Ambiente:               utils.ObterEnv("APP_AMBIENTE", "desenvolvimento"),
+		FcmCaminhoContaServico: fcm,
+		PortaHTTP:              portaHTTP(),
 		PastaPainelWeb:        strings.TrimSpace(utils.ObterEnv("PAINEL_WEB_ASSETS", "")),
 		TokenPadraoAPI:        utils.ObterEnv("API_TOKEN_PADRAO", "dev-super-admin"),
 		AdminNomePadrao:       utils.ObterEnv("ADMIN_NOME_PADRAO", "Administrador Geral"),
@@ -51,4 +56,22 @@ func portaHTTP() int {
 		}
 	}
 	return utils.ObterEnvInt("APP_PORTA", 8080)
+}
+
+// resolverCaminhoContaFCM junta caminho relativo a FCM_BASE_DIR (ex.: supervisord com CWD errado)
+// e normaliza para absoluto. [raw] vazio devolve vazio.
+func resolverCaminhoContaFCM(raw, baseDir string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	p := raw
+	if !filepath.IsAbs(p) && baseDir != "" {
+		p = filepath.Join(baseDir, p)
+	}
+	p = filepath.Clean(p)
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p
 }

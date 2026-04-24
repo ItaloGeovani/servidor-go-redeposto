@@ -32,31 +32,82 @@ type Aplicacao struct {
 
 // verificarCaminhoContaFCM confirma no arranque que o JSON existe e e ficheiro (log no terminal).
 // Se FCM_SERVICE_ACCOUNT_PATH estiver vazio, nao e erro; push fica desativado.
-// Se estiver preenchido e o ficheiro nao abrir, o servidor nao inicia.
-func verificarCaminhoContaFCM(cfg config.Config) error {
+// Tenta varios candidatos: caminho do .env, CWD, pasta do executavel (hospedagem com CWD diferente da app).
+// Em sucesso, actualiza [cfg].FcmCaminhoContaServico para o caminho absoluto que abriu.
+func verificarCaminhoContaFCM(cfg *config.Config) error {
 	p := strings.TrimSpace(cfg.FcmCaminhoContaServico)
 	if p == "" {
 		log.Print("fcm: FCM_SERVICE_ACCOUNT_PATH nao definido; envio de push desativado")
 		return nil
 	}
-	abs, errAbs := filepath.Abs(p)
-	if errAbs != nil {
-		abs = p
+	cands := candidatosCaminhoFcm(p)
+	for _, c := range cands {
+		info, err := os.Stat(c)
+		if err != nil {
+			continue
+		}
+		if info.IsDir() {
+			continue
+		}
+		abs, errA := filepath.Abs(c)
+		if errA != nil {
+			abs = c
+		}
+		cfg.FcmCaminhoContaServico = abs
+		log.Printf("fcm: credenciais OK: %q (%d bytes)", abs, info.Size())
+		return nil
 	}
-	info, err := os.Stat(p)
-	if err != nil {
-		return fmt.Errorf("fcm: ficheiro da conta de servico inacessivel %q: %w (dica: use caminho absoluto se o CWD nao for a pasta do projeto)", p, err)
+	b := filepath.Base(p)
+	return fmt.Errorf("fcm: ficheiro da conta de servico nao encontrado. Tentou %d caminhos; coloque %q na pasta da API no servidor (ao lado do executavel) ou defina FCM_BASE_DIR. Ultimo FCM_SERVICE_ACCOUNT_PATH=%q", len(cands), b, p)
+}
+
+func candidatosCaminhoFcm(p string) []string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return nil
 	}
-	if info.IsDir() {
-		return fmt.Errorf("fcm: o caminho %q e uma pasta, nao o json da conta de servico", p)
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return
+		}
+		if a, e := filepath.Abs(s); e == nil {
+			s = a
+		}
+		if _, ok := seen[s]; ok {
+			return
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
 	}
-	log.Printf("fcm: credenciais encontradas: %q (%d bytes) [abs: %s]", p, info.Size(), abs)
-	return nil
+	add(p)
+	if !filepath.IsAbs(p) {
+		if w, e := os.Getwd(); e == nil {
+			add(filepath.Join(w, p))
+		}
+	}
+	nome := filepath.Base(p)
+	// 3) mesmo nome de ficheiro na pasta do executavel (typico: json na raiz do deploy, bin noutro sitio)
+	if ex, e := os.Executable(); e == nil {
+		ex = filepath.Clean(ex)
+		dirEx := filepath.Dir(ex)
+		if !filepath.IsAbs(p) {
+			add(filepath.Join(dirEx, p))
+		}
+		add(filepath.Join(dirEx, nome))
+	}
+	// 4) so o nome do ficheiro no CWD
+	if w, e := os.Getwd(); e == nil {
+		add(filepath.Join(w, nome))
+	}
+	return out
 }
 
 func Nova() (*Aplicacao, error) {
 	cfg := config.Carregar()
-	if err := verificarCaminhoContaFCM(cfg); err != nil {
+	if err := verificarCaminhoContaFCM(&cfg); err != nil {
 		return nil, err
 	}
 	banco, err := abrirBanco()
