@@ -152,7 +152,7 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 
-	autenticador := servicos.NovoAutenticadorToken(cfg.TokenPadraoAPI)
+	autenticador := servicos.NovoAutenticadorTokenComPersistencia(banco, cfg.TokenPadraoAPI, cfg.SessaoAPIDuracao)
 	repoAdmin := repositorios.NovoAdministradorGeralPostgres(banco)
 	repoGestor := repositorios.NovoGestorRedePostgres(banco)
 	repoRede := repositorios.NovoRedePostgres(banco)

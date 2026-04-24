@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"gaspass-servidor/utils"
 )
@@ -24,6 +25,8 @@ type Config struct {
 	AdminSenhaPadrao      string
 	AdminBootstrapAtivado bool
 	CORSOrigemPermitida   string
+	// SessaoAPIDuracao: validade de tokens tok_* (login/cadastro) quando a sessão persiste no Postgres.
+	SessaoAPIDuracao time.Duration
 }
 
 func Carregar() Config {
@@ -42,8 +45,21 @@ func Carregar() Config {
 		AdminSenhaPadrao:      utils.ObterEnv("ADMIN_SENHA_PADRAO", "123456"),
 		AdminBootstrapAtivado: utils.ObterEnv("ADMIN_BOOTSTRAP_ATIVADO", "true") == "true",
 		CORSOrigemPermitida:   utils.ObterEnv("CORS_ORIGEM_PERMITIDA", "http://localhost:5173"),
-		PublicBaseURL:         strings.TrimRight(strings.TrimSpace(utils.ObterEnv("PUBLIC_BASE_URL", "")), "/"),
+		PublicBaseURL:    strings.TrimRight(strings.TrimSpace(utils.ObterEnv("PUBLIC_BASE_URL", "")), "/"),
+		SessaoAPIDuracao: duracaoSessaoAPI(),
 	}
+}
+
+// duracaoSessaoAPI: env SESSAO_DURACAO_DIAS (1–365), default 30.
+func duracaoSessaoAPI() time.Duration {
+	d := utils.ObterEnvInt("SESSAO_DURACAO_DIAS", 30)
+	if d < 1 {
+		d = 1
+	}
+	if d > 365 {
+		d = 365
+	}
+	return time.Duration(d) * 24 * time.Hour
 }
 
 // portaHTTP: Heroku/Elastic costumam definir PORT; senao APP_PORTA; padrao 8080.
