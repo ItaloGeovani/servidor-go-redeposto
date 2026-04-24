@@ -4,5 +4,5 @@
 *-firebase-adminsdk-*.json
 niocard-*-firebase-adminsdk-*.json
 **/secrets/
-.env
+# .env
 .env.*
