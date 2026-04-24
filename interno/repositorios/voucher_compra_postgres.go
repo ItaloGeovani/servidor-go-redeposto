@@ -156,9 +156,38 @@ func (r *voucherCompraPostgres) ContarUsosCampanhaUsuario(campanhaID, usuarioID,
 	err := r.db.QueryRowContext(ctx, `
 SELECT COUNT(*) FROM voucher_compras
 WHERE campanha_id = $1::uuid AND usuario_id = $2::uuid AND rede_id = $3::uuid
-  AND status IN ('ATIVO', 'USADO', 'AGUARDANDO_PAGAMENTO')
+  AND status IN ('ATIVO', 'USADO')
 `, campanhaID, usuarioID, redeID).Scan(&n)
 	return n, err
+}
+
+func (r *voucherCompraPostgres) ListarUsosAprovadosPorCampanha(redeID, usuarioID string) (map[string]int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	rows, err := r.db.QueryContext(ctx, `
+SELECT campanha_id::text, COUNT(*)::int
+FROM voucher_compras
+WHERE rede_id = $1::uuid AND usuario_id = $2::uuid
+  AND campanha_id IS NOT NULL
+  AND status IN ('ATIVO', 'USADO')
+GROUP BY campanha_id
+`, redeID, usuarioID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]int)
+	for rows.Next() {
+		var id string
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(id) != "" {
+			out[id] = n
+		}
+	}
+	return out, rows.Err()
 }
 
 func (r *voucherCompraPostgres) BuscarPorIDRede(id, redeID string) (*VoucherCompraRegistro, error) {

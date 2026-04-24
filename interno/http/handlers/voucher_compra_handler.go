@@ -179,6 +179,33 @@ func (h *Handlers) GetVoucherCompras(w http.ResponseWriter, r *http.Request) {
 	utils.ResponderJSON(w, http.StatusOK, map[string]any{"itens": lista, "total": len(lista)})
 }
 
+// GetVoucherCompraUsosCampanha GET /v1/eu/vouchers/usos-campanha — usos com pagamento aprovado (ATIVO/USADO) por id de campanha.
+func (h *Handlers) GetVoucherCompraUsosCampanha(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+	u := middlewares.Usuario(r.Context())
+	if u == nil || u.Papel != modelos.PapelCliente {
+		utils.ResponderErro(w, http.StatusForbidden, "apenas clientes")
+		return
+	}
+	if h.voucherCompraSvc == nil {
+		utils.ResponderErro(w, http.StatusServiceUnavailable, "servico indisponivel")
+		return
+	}
+	m, err := h.voucherCompraSvc.UsosAprovadosPorCampanha(u.IDRede, u.IDUsuario)
+	if err != nil {
+		if errors.Is(err, servicos.ErrDadosInvalidos) {
+			utils.ResponderErro(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		utils.ResponderErro(w, http.StatusInternalServerError, "falha ao contar usos")
+		return
+	}
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{"usos_por_campanha": m})
+}
+
 // GetVoucherCompraDetalhe GET /v1/eu/vouchers/detalhe?id=uuid
 func (h *Handlers) GetVoucherCompraDetalhe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

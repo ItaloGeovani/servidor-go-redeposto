@@ -386,6 +386,14 @@ func (s *ServicoVoucherCompra) ListarMeus(rede, usuarioID string) ([]*repositori
 	return s.repo.ListarDoUsuario(rede, usuarioID, 80)
 }
 
+// UsosAprovadosPorCampanha contagem (pagamento aprovado: ATIVO ou USADO) por campanha, para 1/x no app.
+func (s *ServicoVoucherCompra) UsosAprovadosPorCampanha(rede, usuarioID string) (map[string]int, error) {
+	if strings.TrimSpace(rede) == "" || strings.TrimSpace(usuarioID) == "" {
+		return nil, ErrDadosInvalidos
+	}
+	return s.repo.ListarUsosAprovadosPorCampanha(rede, usuarioID)
+}
+
 // BuscarMeu de um registro.
 func (s *ServicoVoucherCompra) BuscarMeu(id, rede, usuario string) (*repositorios.VoucherCompraRegistro, error) {
 	return s.repo.BuscarPorID(id, usuario, rede)

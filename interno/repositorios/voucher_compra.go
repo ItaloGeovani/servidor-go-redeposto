@@ -35,6 +35,8 @@ type VoucherCompraRepositorio interface {
 	BuscarPorID(id, usuarioID, redeID string) (*VoucherCompraRegistro, error)
 	ListarDoUsuario(redeID, usuarioID string, limite int) ([]*VoucherCompraRegistro, error)
 	ContarUsosCampanhaUsuario(campanhaID, usuarioID, redeID string) (int, error)
+	// Contar usos aprovados (status ATIVO ou USADO) por campanha, para o app exibir 1/x.
+	ListarUsosAprovadosPorCampanha(redeID, usuarioID string) (map[string]int, error)
 	BuscarPorIDRede(id, redeID string) (*VoucherCompraRegistro, error)
 	AtivarPagamentoAprovado(id, redeID, codigo string, expiraResgate time.Time) error
 }
