@@ -57,27 +57,26 @@ func verificarCaminhoContaFCM(cfg *config.Config) error {
 		log.Printf("fcm: credenciais OK: %q (%d bytes)", abs, info.Size())
 		return nil
 	}
-	if utils.ObterEnvSimNao("FCM_PERMITIR_ARRANQUE_SEM_CREDENCIAL", false) {
-		log.Printf("fcm: ATENCAO: ficheiro nao encontrado entre %d candidatos; push desativado. Importe o json no servidor e reinicie, ou ajuste FCM_SERVICE_ACCOUNT_PATH.", len(cands))
+	// Padrao: a API sobe sem push. Com FCM_EXIGE_FICHEIRO=1, falha se o ficheiro nao existir (CI/producao rigorosa).
+	if utils.ObterEnvSimNao("FCM_EXIGE_FICHEIRO", false) {
+		linhas := make([]string, 0, len(cands))
 		for i, c := range cands {
-			if i >= 12 {
+			if i >= 20 {
+				linhas = append(linhas, fmt.Sprintf("... (+%d)", len(cands)-i))
 				break
 			}
-			log.Printf("fcm:   candidato %d: %q", i+1, c)
+			linhas = append(linhas, c)
 		}
-		cfg.FcmCaminhoContaServico = ""
-		return nil
+		b := filepath.Base(p)
+		return fmt.Errorf("fcm: ficheiro nao encontrado em %d caminhos. Procurou-se %q. Amostra: %s. (Carregue o .json no servidor, ou nao defina FCM_EXIGE_FICHEIRO.)", len(cands), b, strings.Join(linhas, " | "))
 	}
-	linhas := make([]string, 0, len(cands))
-	for i, c := range cands {
-		if i >= 20 {
-			linhas = append(linhas, fmt.Sprintf("... (+%d)", len(cands)-i))
-			break
-		}
-		linhas = append(linhas, c)
+	primeiro := ""
+	if len(cands) > 0 {
+		primeiro = cands[0]
 	}
-	b := filepath.Base(p)
-	return fmt.Errorf("fcm: ficheiro da conta de servico nao encontrado em %d caminhos testados. Procurou-se %q. Caminhos: %s. Solucao: carregar o .json nessa pasta, ou FCM_BASE_DIR, ou FCM_PERMITIR_ARRANQUE_SEM_CREDENCIAL=1 para subir a API sem push", len(cands), b, strings.Join(linhas, " | "))
+	log.Printf("fcm: AVISO: ficheiro nao encontrado; push FCM desativado. Carregue o JSON da conta de servico no servidor e reinicie, ou ajuste FCM_SERVICE_ACCOUNT_PATH. Tentou %d caminhos (ex.: %q)", len(cands), primeiro)
+	cfg.FcmCaminhoContaServico = ""
+	return nil
 }
 
 func candidatosCaminhoFcm(p string) []string {
@@ -112,14 +111,17 @@ func candidatosCaminhoFcm(p string) []string {
 	if w, e := os.Getwd(); e == nil {
 		candidatoSubirPastas(filepath.Clean(w), nome, add)
 	}
-	// executavel: subir a partir da pasta do binario
+	// executavel: a partir do bin real (nunca subir a partir do cache "go run", evita dezenas de caminhos inuteis)
 	if ex, e := os.Executable(); e == nil {
 		ex = filepath.Clean(ex)
-		dirEx := filepath.Dir(ex)
-		if !filepath.IsAbs(p) {
-			add(filepath.Join(dirEx, p))
+		if !strings.Contains(ex, "go-build") {
+			dirEx := filepath.Dir(ex)
+			if !filepath.IsAbs(p) {
+				add(filepath.Join(dirEx, p))
+			}
+			candidatoSubirPastas(dirEx, nome, add)
 		}
-		candidatoSubirPastas(dirEx, nome, add)
+		// se "go run", so CWD + FCM_BASE_DIR + p definem os candidatos (json na pasta do projecto)
 	}
 	return out
 }
