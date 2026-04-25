@@ -23,6 +23,7 @@ type Handlers struct {
 	voucherCompraSvc      *servicos.ServicoVoucherCompra
 	combustivelRedeService *servicos.ServicoCombustivelRede
 	indiqueGanhe          *servicos.ServicoIndiqueGanhe
+	carteiraRepo          repositorios.CarteiraRepositorio
 	cfg                   config.Config
 }
 
@@ -43,6 +44,7 @@ func Novos(
 	voucherCompraSvc *servicos.ServicoVoucherCompra,
 	combustivelRedeService *servicos.ServicoCombustivelRede,
 	indiqueGanhe *servicos.ServicoIndiqueGanhe,
+	carteiraRepo repositorios.CarteiraRepositorio,
 	cfg config.Config,
 ) *Handlers {
 	return &Handlers{
@@ -62,6 +64,7 @@ func Novos(
 		voucherCompraSvc:       voucherCompraSvc,
 		combustivelRedeService: combustivelRedeService,
 		indiqueGanhe:          indiqueGanhe,
+		carteiraRepo:          carteiraRepo,
 		cfg:                    cfg,
 	}
 }

@@ -196,7 +196,7 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 
-	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, svcIndiqueGanhe, cfg)
+	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, svcIndiqueGanhe, repoCarteira, cfg)
 
 	muxPrincipal := http.NewServeMux()
 	mwGlobal := []middlewares.Middleware{
