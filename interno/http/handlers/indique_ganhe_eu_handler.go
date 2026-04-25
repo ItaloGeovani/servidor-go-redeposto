@@ -30,22 +30,15 @@ func (h *Handlers) GetEuIndiqueGanhe(w http.ResponseWriter, r *http.Request) {
 		utils.ResponderErro(w, http.StatusBadRequest, "sessao sem rede")
 		return
 	}
-	cod, err := h.indiqueGanhe.MeuCodigoEU(rede, uid)
-	if err != nil {
-		utils.ResponderErro(w, http.StatusInternalServerError, "falha ao obter codigo")
+	red, errRede := h.redeService.BuscarPorID(rede)
+	if errRede != nil || red == nil {
+		utils.ResponderErro(w, http.StatusInternalServerError, "falha ao carregar rede")
 		return
 	}
-	red, err := h.redeService.BuscarPorID(rede)
+	m, err := h.indiqueGanhe.TelaIndiqueGanheEU(rede, uid, red)
 	if err != nil {
-		utils.ResponderJSON(w, http.StatusOK, map[string]any{
-			"codigo_indicacao": cod,
-		})
+		utils.ResponderErro(w, http.StatusInternalServerError, "falha ao obter indique e ganhe")
 		return
 	}
-	utils.ResponderJSON(w, http.StatusOK, map[string]any{
-		"codigo_indicacao":         cod,
-		"moeda_virtual_nome":       strings.TrimSpace(red.MoedaVirtualNome),
-		"moeda_virtual_cotacao":    red.MoedaVirtualCotacao,
-		"app_modulo_indique_ganhe": red.AppModuloIndiqueGanhe,
-	})
+	utils.ResponderJSON(w, http.StatusOK, m)
 }

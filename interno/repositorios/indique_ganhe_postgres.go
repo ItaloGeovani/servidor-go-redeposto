@@ -27,11 +27,21 @@ type IndicacaoRegisto struct {
 	PremiadoCompraInd   bool
 }
 
+// IndicacaoLinhaReferente uma indicação vista pelo referente (lista no app).
+type IndicacaoLinhaReferente struct {
+	ID                    string
+	CriadoEm              time.Time
+	IndicadoNomeCompleto  string
+	PremiadoCadastroRef   bool
+	PremiadoCompraRef     bool
+}
+
 type IndiqueGanheRepositorio interface {
 	BuscarConfig(redeID string) (*RedeIndiqueGanheConfig, error)
 	SalvarConfig(redeID, regra string, ref, ind float64) error
 	InsertIndicacao(rede, referente, indicado, codInformado string) (string, error)
 	BuscarIndicacaoPorIndicado(rede, indicadoID string) (*IndicacaoRegisto, error)
+	ListarIndicacoesDoReferente(rede, referenteUsuarioID string) ([]IndicacaoLinhaReferente, error)
 	MarcarPremioCadastro(rede, indicID string, refOK, indOK bool) error
 	MarcarPremioCompra(rede, indicID string, refOK, indOK bool) error
 	ContarVouchersAprovadosUsuario(rede, usuarioID string) (int, error)
@@ -136,6 +146,42 @@ WHERE rede_id = $1::uuid AND indicado_usuario_id = $2::uuid
 		return nil, err
 	}
 	return &x, nil
+}
+
+func (r *indiqueGanhePostgres) ListarIndicacoesDoReferente(rede, referenteUsuarioID string) ([]IndicacaoLinhaReferente, error) {
+	rede = strings.TrimSpace(rede)
+	referenteUsuarioID = strings.TrimSpace(referenteUsuarioID)
+	if rede == "" || referenteUsuarioID == "" {
+		return nil, errors.New("parametros invalidos")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	const q = `
+SELECT
+  i.id::text,
+  i.criado_em,
+  COALESCE(TRIM(u.nome_completo), '') AS nome,
+  i.premiado_cadastro_referente,
+  i.premiado_compra_referente
+FROM indicacoes i
+INNER JOIN usuarios u ON u.id = i.indicado_usuario_id
+WHERE i.rede_id = $1::uuid AND i.referente_usuario_id = $2::uuid
+ORDER BY i.criado_em DESC
+LIMIT 200`
+	rows, err := r.db.QueryContext(ctx, q, rede, referenteUsuarioID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []IndicacaoLinhaReferente
+	for rows.Next() {
+		var lin IndicacaoLinhaReferente
+		if err := rows.Scan(&lin.ID, &lin.CriadoEm, &lin.IndicadoNomeCompleto, &lin.PremiadoCadastroRef, &lin.PremiadoCompraRef); err != nil {
+			return nil, err
+		}
+		out = append(out, lin)
+	}
+	return out, rows.Err()
 }
 
 func (r *indiqueGanhePostgres) MarcarPremioCadastro(rede, indicID string, refOK, indOK bool) error {

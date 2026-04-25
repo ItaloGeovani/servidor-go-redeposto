@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"strings"
+	"time"
 
 	"gaspass-servidor/interno/modelos"
 	"gaspass-servidor/interno/repositorios"
@@ -181,4 +182,83 @@ func (s *ServicoIndiqueGanhe) SalvarConfigIndique(rede, regra string, mRef, mInd
 // MeuCodigoEU garante e devolve o codigo do usuario (app autenticado).
 func (s *ServicoIndiqueGanhe) MeuCodigoEU(rede, usuarioID string) (string, error) {
 	return s.GaranteCodigoIndicacao(rede, usuarioID)
+}
+
+// mascararNomeIndicado ex.: "Maria Silva Costa" -> "Maria C."
+func mascararNomeIndicado(nome string) string {
+	nome = strings.TrimSpace(nome)
+	if nome == "" {
+		return "Indicado"
+	}
+	parts := strings.Fields(nome)
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	first := parts[0]
+	last := []rune(parts[len(parts)-1])
+	if len(last) == 0 {
+		return first
+	}
+	return first + " " + string(last[0]) + "."
+}
+
+func premioReferenteAprovado(regra string, premCadRef, premCompraRef bool) bool {
+	if strings.TrimSpace(regra) == "CADASTRAR" {
+		return premCadRef
+	}
+	return premCompraRef
+}
+
+func textoPendenciaPeloRegra(regra string) string {
+	if strings.TrimSpace(regra) == "CADASTRAR" {
+		return "Ainda processando o bônus de cadastro. Se demorar, fale com o suporte da rede."
+	}
+	return "A pessoa indicada ainda não fez a primeira compra de voucher paga e aprovada no app. Assim que isso acontecer, seu bônus em moedas da rede é creditado automaticamente."
+}
+
+// TelaIndiqueGanheEU payload completo para a tela do app (código, regra, lista).
+func (s *ServicoIndiqueGanhe) TelaIndiqueGanheEU(rede, usuarioID string, r *modelos.Rede) (map[string]any, error) {
+	cod, err := s.GaranteCodigoIndicacao(rede, usuarioID)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := s.ind.BuscarConfig(rede)
+	if err != nil || cfg == nil {
+		cfg = &repositorios.RedeIndiqueGanheConfig{Regra: "PRIMEIRA_COMPRA_VOUCHER"}
+	}
+	linhas, err := s.ind.ListarIndicacoesDoReferente(rede, usuarioID)
+	if err != nil {
+		return nil, err
+	}
+	regra := strings.TrimSpace(cfg.Regra)
+	indicacoes := make([]map[string]any, 0, len(linhas))
+	for _, li := range linhas {
+		aprov := premioReferenteAprovado(regra, li.PremiadoCadastroRef, li.PremiadoCompraRef)
+		item := map[string]any{
+			"id":                        strings.TrimSpace(li.ID),
+			"indicado_nome_mascarado":  mascararNomeIndicado(li.IndicadoNomeCompleto),
+			"criado_em":                 li.CriadoEm.UTC().Format(time.RFC3339),
+			"premio_referente_aprovado": aprov,
+		}
+		if !aprov {
+			item["motivo_pendencia"] = textoPendenciaPeloRegra(regra)
+		}
+		indicacoes = append(indicacoes, item)
+	}
+	m := map[string]any{
+		"codigo_indicacao":          cod,
+		"regra_premio":              regra,
+		"moedas_premio_referente":   cfg.MoedasPremioReferente,
+		"moedas_premio_indicado":   cfg.MoedasPremioIndicado,
+		"indicacoes":                indicacoes,
+		"texto_regra_cadastrar":     "Quem se cadastrar com seu código ganha a recompensa assim que o cadastro for concluído (conforme pontos definidos pela rede).",
+		"texto_regra_primeira_compra": "Quem se cadastrar com seu código só libera bônus para vocês após a primeira compra de voucher aprovada no app.",
+	}
+	if r != nil {
+		m["rede_nome_fantasia"] = strings.TrimSpace(r.NomeFantasia)
+		m["moeda_virtual_nome"] = strings.TrimSpace(r.MoedaVirtualNome)
+		m["moeda_virtual_cotacao"] = r.MoedaVirtualCotacao
+		m["app_modulo_indique_ganhe"] = r.AppModuloIndiqueGanhe
+	}
+	return m, nil
 }
