@@ -204,10 +204,17 @@ func (h *Handlers) PublicRedeInfo(w http.ResponseWriter, r *http.Request) {
 		utils.ResponderErro(w, http.StatusNotFound, "rede indisponivel")
 		return
 	}
+	// CDNs e proxies costumam cachear GET; flags mudam no painel e o app precisa do valor atual.
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
 	utils.ResponderJSON(w, http.StatusOK, map[string]any{
-		"id_rede":               idRede,
-		"nome_fantasia":         strings.TrimSpace(rede.NomeFantasia),
-		"moeda_virtual_nome":    strings.TrimSpace(rede.MoedaVirtualNome),
-		"moeda_virtual_cotacao": rede.MoedaVirtualCotacao,
+		"id_rede":                   idRede,
+		"nome_fantasia":             strings.TrimSpace(rede.NomeFantasia),
+		"moeda_virtual_nome":        strings.TrimSpace(rede.MoedaVirtualNome),
+		"moeda_virtual_cotacao":     rede.MoedaVirtualCotacao,
+		"app_modulo_indique_ganhe":  rede.AppModuloIndiqueGanhe,
+		"app_modulo_checkin_diario": rede.AppModuloCheckinDiario,
+		"app_modulo_gire_ganhe":     rede.AppModuloGireGanhe,
+		"app_modulo_redes_sociais":  rede.AppModuloRedesSociais,
 	})
 }
