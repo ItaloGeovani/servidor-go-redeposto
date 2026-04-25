@@ -149,13 +149,13 @@ func (h *Handlers) CriarCampanhaGestorRede(w http.ResponseWriter, r *http.Reques
 		ValidaNoPostoFisico: boolOuPadrao(req.ValidaNoPostoFisico, false),
 		ModalidadeDesconto:  req.ModalidadeDesconto,
 		BaseDesconto:        req.BaseDesconto,
-		ValorDesconto:         req.ValorDesconto,
-		ValorMinimoCompra:     req.ValorMinimoCompra,
-		ValorMaximoCompra:     req.ValorMaximoCompra,
-		MaxUsosPorCliente:     req.MaxUsosPorCliente,
-		LitrosMin:             req.LitrosMin,
-		LitrosMax:             req.LitrosMax,
-		IDsCombustiveisRede:   req.IDsCombustiveisRede,
+		ValorDesconto:       req.ValorDesconto,
+		ValorMinimoCompra:   req.ValorMinimoCompra,
+		ValorMaximoCompra:   req.ValorMaximoCompra,
+		MaxUsosPorCliente:   req.MaxUsosPorCliente,
+		LitrosMin:           req.LitrosMin,
+		LitrosMax:           req.LitrosMax,
+		IDsCombustiveisRede: req.IDsCombustiveisRede,
 	})
 	if err != nil {
 		switch {
@@ -229,13 +229,13 @@ func (h *Handlers) EditarCampanhaGestorRede(w http.ResponseWriter, r *http.Reque
 		ValidaNoPostoFisico: boolOuPadrao(req.ValidaNoPostoFisico, false),
 		ModalidadeDesconto:  req.ModalidadeDesconto,
 		BaseDesconto:        req.BaseDesconto,
-		ValorDesconto:         req.ValorDesconto,
-		ValorMinimoCompra:     req.ValorMinimoCompra,
-		ValorMaximoCompra:     req.ValorMaximoCompra,
-		MaxUsosPorCliente:     req.MaxUsosPorCliente,
-		LitrosMin:             req.LitrosMin,
-		LitrosMax:             req.LitrosMax,
-		IDsCombustiveisRede:   req.IDsCombustiveisRede,
+		ValorDesconto:       req.ValorDesconto,
+		ValorMinimoCompra:   req.ValorMinimoCompra,
+		ValorMaximoCompra:   req.ValorMaximoCompra,
+		MaxUsosPorCliente:   req.MaxUsosPorCliente,
+		LitrosMin:           req.LitrosMin,
+		LitrosMax:           req.LitrosMax,
+		IDsCombustiveisRede: req.IDsCombustiveisRede,
 	})
 	if err != nil {
 		switch {
@@ -552,6 +552,45 @@ func (h *Handlers) EditarVoucherConfigMinhaRedeGestor(w http.ResponseWriter, r *
 	}
 	utils.ResponderJSON(w, http.StatusOK, map[string]any{
 		"mensagem": "configuracao de voucher atualizada",
+		"rede":     rede,
+	})
+}
+
+// EditarAppModulosMinhaRedeGestor PATCH /v1/gestor-rede/dev/redes/app-modulos
+func (h *Handlers) EditarAppModulosMinhaRedeGestor(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+	idRede, ok := h.idRedeDaSessao(w, r)
+	if !ok {
+		return
+	}
+	var req reqEditarAppModulosRede
+	if err := utils.DecodificarJSON(r, &req); err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, "payload invalido")
+		return
+	}
+	rede, err := h.redeService.EditarAppModulos(servicos.EditarAppModulosRedeInput{
+		ID:                     idRede,
+		AppModuloIndiqueGanhe:  req.AppModuloIndiqueGanhe,
+		AppModuloCheckinDiario: req.AppModuloCheckinDiario,
+		AppModuloGireGanhe:     req.AppModuloGireGanhe,
+		AppModuloRedesSociais:  req.AppModuloRedesSociais,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, err.Error())
+		default:
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao atualizar modulos do app")
+		}
+		return
+	}
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"mensagem": "modulos do app atualizados",
 		"rede":     rede,
 	})
 }

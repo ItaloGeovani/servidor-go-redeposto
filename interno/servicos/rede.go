@@ -17,6 +17,7 @@ type ServicoRede interface {
 	Editar(input EditarRedeInput) (*modelos.Rede, error)
 	EditarMoedaVirtual(input EditarMoedaVirtualRedeInput) (*modelos.Rede, error)
 	EditarVoucherConfig(input EditarVoucherConfigRedeInput) (*modelos.Rede, error)
+	EditarAppModulos(input EditarAppModulosRedeInput) (*modelos.Rede, error)
 	Ativar(id string) (*modelos.Rede, error)
 	Desativar(id string) (*modelos.Rede, error)
 }
@@ -55,6 +56,15 @@ type EditarVoucherConfigRedeInput struct {
 	ID      string
 	Dias    *int // 1–365, dias para usar o saldo no posto após PIX aprovado
 	Minutos *int // 5–10080, janela para concluir o pagamento PIX
+}
+
+// EditarAppModulosRedeInput liga/desliga módulos opcionais exibidos no app do cliente.
+type EditarAppModulosRedeInput struct {
+	ID                     string
+	AppModuloIndiqueGanhe  bool
+	AppModuloCheckinDiario bool
+	AppModuloGireGanhe     bool
+	AppModuloRedesSociais  bool
 }
 
 type servicoRede struct {
@@ -188,6 +198,20 @@ func (s *servicoRede) EditarVoucherConfig(input EditarVoucherConfigRedeInput) (*
 			}
 			r.VoucherMinutosExpiraPagamentoPix = *input.Minutos
 		}
+		return nil
+	})
+}
+
+func (s *servicoRede) EditarAppModulos(input EditarAppModulosRedeInput) (*modelos.Rede, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	if input.ID == "" {
+		return nil, ErrDadosInvalidos
+	}
+	return s.repo.Atualizar(input.ID, func(r *modelos.Rede) error {
+		r.AppModuloIndiqueGanhe = input.AppModuloIndiqueGanhe
+		r.AppModuloCheckinDiario = input.AppModuloCheckinDiario
+		r.AppModuloGireGanhe = input.AppModuloGireGanhe
+		r.AppModuloRedesSociais = input.AppModuloRedesSociais
 		return nil
 	})
 }

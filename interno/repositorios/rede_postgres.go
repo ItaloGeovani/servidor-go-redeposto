@@ -39,6 +39,10 @@ SELECT
   moeda_virtual_cotacao::float8,
   COALESCE(voucher_dias_validade_resgate, 7),
   COALESCE(voucher_minutos_expira_pagamento_pix, 30),
+  COALESCE(app_modulo_indique_ganhe, false),
+  COALESCE(app_modulo_checkin_diario, false),
+  COALESCE(app_modulo_gire_ganhe, false),
+  COALESCE(app_modulo_redes_sociais, false),
   COALESCE(ativa, true),
   criado_em,
   atualizado_em
@@ -86,6 +90,10 @@ SELECT
   moeda_virtual_cotacao::float8,
   COALESCE(voucher_dias_validade_resgate, 7),
   COALESCE(voucher_minutos_expira_pagamento_pix, 30),
+  COALESCE(app_modulo_indique_ganhe, false),
+  COALESCE(app_modulo_checkin_diario, false),
+  COALESCE(app_modulo_gire_ganhe, false),
+  COALESCE(app_modulo_redes_sociais, false),
   COALESCE(ativa, true),
   criado_em,
   atualizado_em
@@ -176,6 +184,10 @@ SELECT
   moeda_virtual_cotacao::float8,
   COALESCE(voucher_dias_validade_resgate, 7),
   COALESCE(voucher_minutos_expira_pagamento_pix, 30),
+  COALESCE(app_modulo_indique_ganhe, false),
+  COALESCE(app_modulo_checkin_diario, false),
+  COALESCE(app_modulo_gire_ganhe, false),
+  COALESCE(app_modulo_redes_sociais, false),
   COALESCE(ativa, true),
   criado_em,
   atualizado_em
@@ -213,6 +225,10 @@ SET
   moeda_virtual_cotacao = $14,
   voucher_dias_validade_resgate = $15,
   voucher_minutos_expira_pagamento_pix = $16,
+  app_modulo_indique_ganhe = $17,
+  app_modulo_checkin_diario = $18,
+  app_modulo_gire_ganhe = $19,
+  app_modulo_redes_sociais = $20,
   atualizado_em = NOW()
 WHERE id = $1
 RETURNING atualizado_em`
@@ -241,6 +257,10 @@ RETURNING atualizado_em`
 		rede.MoedaVirtualCotacao,
 		rede.VoucherDiasValidadeResgate,
 		rede.VoucherMinutosExpiraPagamentoPix,
+		rede.AppModuloIndiqueGanhe,
+		rede.AppModuloCheckinDiario,
+		rede.AppModuloGireGanhe,
+		rede.AppModuloRedesSociais,
 	).Scan(&rede.AtualizadoEm)
 	if err != nil {
 		return nil, mapearErroRedePostgres(err)
@@ -275,6 +295,10 @@ func scanRede(s scannerRede) (*modelos.Rede, error) {
 		&rede.MoedaVirtualCotacao,
 		&rede.VoucherDiasValidadeResgate,
 		&rede.VoucherMinutosExpiraPagamentoPix,
+		&rede.AppModuloIndiqueGanhe,
+		&rede.AppModuloCheckinDiario,
+		&rede.AppModuloGireGanhe,
+		&rede.AppModuloRedesSociais,
 		&rede.Ativa,
 		&rede.CriadoEm,
 		&rede.AtualizadoEm,

@@ -52,6 +52,15 @@ type reqEditarVoucherConfigRede struct {
 	Minutos *int   `json:"voucher_minutos_expira_pagamento_pix"`
 }
 
+// reqEditarAppModulosRede PATCH gestor: sem id. Super-admin: informe id da rede.
+type reqEditarAppModulosRede struct {
+	ID                     string `json:"id"`
+	AppModuloIndiqueGanhe  bool   `json:"app_modulo_indique_ganhe"`
+	AppModuloCheckinDiario bool   `json:"app_modulo_checkin_diario"`
+	AppModuloGireGanhe     bool   `json:"app_modulo_gire_ganhe"`
+	AppModuloRedesSociais  bool   `json:"app_modulo_redes_sociais"`
+}
+
 func (h *Handlers) ListarRedesDev(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
@@ -221,6 +230,45 @@ func (h *Handlers) EditarVoucherConfigRedeDev(w http.ResponseWriter, r *http.Req
 	}
 	utils.ResponderJSON(w, http.StatusOK, map[string]any{
 		"mensagem": "configuracao de voucher atualizada",
+		"rede":     rede,
+	})
+}
+
+// EditarAppModulosRedeDev PATCH /v1/admin/redes/dev/app-modulos (super-admin)
+func (h *Handlers) EditarAppModulosRedeDev(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+		return
+	}
+	var req reqEditarAppModulosRede
+	if err := utils.DecodificarJSON(r, &req); err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, fmt.Sprintf("payload invalido: %v", err))
+		return
+	}
+	if strings.TrimSpace(req.ID) == "" {
+		utils.ResponderErro(w, http.StatusBadRequest, "informe id da rede")
+		return
+	}
+	rede, err := h.redeService.EditarAppModulos(servicos.EditarAppModulosRedeInput{
+		ID:                     req.ID,
+		AppModuloIndiqueGanhe:  req.AppModuloIndiqueGanhe,
+		AppModuloCheckinDiario: req.AppModuloCheckinDiario,
+		AppModuloGireGanhe:     req.AppModuloGireGanhe,
+		AppModuloRedesSociais:  req.AppModuloRedesSociais,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, servicos.ErrDadosInvalidos):
+			utils.ResponderErro(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, repositorios.ErrRedeNaoEncontrada):
+			utils.ResponderErro(w, http.StatusNotFound, err.Error())
+		default:
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao atualizar modulos do app")
+		}
+		return
+	}
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"mensagem": "modulos do app atualizados",
 		"rede":     rede,
 	})
 }

@@ -18,8 +18,13 @@ type Rede struct {
 	// VoucherDiasValidadeResgate dias para usar o saldo no posto após o PIX aprovado.
 	VoucherDiasValidadeResgate int `json:"voucher_dias_validade_resgate"`
 	// VoucherMinutosExpiraPagamentoPix tempo para pagar a cobrança PIX antes de expirar.
-	VoucherMinutosExpiraPagamentoPix int       `json:"voucher_minutos_expira_pagamento_pix"`
-	Ativa                            bool      `json:"ativa"`
-	CriadoEm                         time.Time `json:"criado_em"`
-	AtualizadoEm                     time.Time `json:"atualizado_em"`
+	VoucherMinutosExpiraPagamentoPix int `json:"voucher_minutos_expira_pagamento_pix"`
+	// Módulos opcionais do app (painel: Configuracoes; padrao false).
+	AppModuloIndiqueGanhe  bool      `json:"app_modulo_indique_ganhe"`
+	AppModuloCheckinDiario bool      `json:"app_modulo_checkin_diario"`
+	AppModuloGireGanhe     bool      `json:"app_modulo_gire_ganhe"`
+	AppModuloRedesSociais  bool      `json:"app_modulo_redes_sociais"`
+	Ativa                  bool      `json:"ativa"`
+	CriadoEm               time.Time `json:"criado_em"`
+	AtualizadoEm           time.Time `json:"atualizado_em"`
 }
