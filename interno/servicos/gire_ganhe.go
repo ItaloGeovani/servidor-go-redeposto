@@ -132,26 +132,27 @@ func totalPercentPremiosEspeciais(cfg *repositorios.RedeGireGanheConfig) float64
 	return t
 }
 
-func escolherPremioEspecial(cfg *repositorios.RedeGireGanheConfig, rng *rand.Rand) (hit bool, valor float64) {
+func escolherPremioEspecial(cfg *repositorios.RedeGireGanheConfig, rng *rand.Rand) (hit bool, valor float64, idx int) {
 	if cfg == nil || !cfg.PremiosEspeciaisAtivo || len(cfg.PremiosEspeciais) == 0 {
-		return false, 0
+		return false, 0, -1
 	}
 	tot := totalPercentPremiosEspeciais(cfg)
 	if tot <= 0 {
-		return false, 0
+		return false, 0, -1
 	}
 	r := rng.Float64() * 100
 	if r >= tot {
-		return false, 0
+		return false, 0, -1
 	}
 	var acc float64
-	for _, p := range cfg.PremiosEspeciais {
+	for i, p := range cfg.PremiosEspeciais {
 		acc += p.Percentual
 		if r < acc {
-			return true, p.ValorMoedas
+			return true, p.ValorMoedas, i
 		}
 	}
-	return true, cfg.PremiosEspeciais[len(cfg.PremiosEspeciais)-1].ValorMoedas
+	last := len(cfg.PremiosEspeciais) - 1
+	return true, cfg.PremiosEspeciais[last].ValorMoedas, last
 }
 
 func premioEspecialMaxMoedas(cfg *repositorios.RedeGireGanheConfig) float64 {
@@ -178,6 +179,55 @@ func valoresPremiosEspeciaisMoedas(cfg *repositorios.RedeGireGanheConfig) []floa
 		}
 	}
 	return out
+}
+
+func indicesSlotsEspeciais(qtd int) []int {
+	if qtd <= 0 {
+		return []int{}
+	}
+	if qtd >= qtdSlotsRoleta {
+		out := make([]int, 0, qtdSlotsRoleta)
+		for i := 0; i < qtdSlotsRoleta; i++ {
+			out = append(out, i)
+		}
+		return out
+	}
+	out := make([]int, 0, qtd)
+	seen := map[int]bool{}
+	for i := 0; i < qtd; i++ {
+		idx := int(float64(i) * float64(qtdSlotsRoleta) / float64(qtd))
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= qtdSlotsRoleta {
+			idx = qtdSlotsRoleta - 1
+		}
+		if !seen[idx] {
+			seen[idx] = true
+			out = append(out, idx)
+		}
+	}
+	return out
+}
+
+func escolherSlotNormal(rng *rand.Rand, especiais []int) int {
+	if len(especiais) == 0 {
+		return rng.Intn(qtdSlotsRoleta)
+	}
+	bloq := map[int]bool{}
+	for _, idx := range especiais {
+		bloq[idx] = true
+	}
+	candidatos := make([]int, 0, qtdSlotsRoleta)
+	for i := 0; i < qtdSlotsRoleta; i++ {
+		if !bloq[i] {
+			candidatos = append(candidatos, i)
+		}
+	}
+	if len(candidatos) == 0 {
+		return rng.Intn(qtdSlotsRoleta)
+	}
+	return candidatos[rng.Intn(len(candidatos))]
 }
 
 func (s *ServicoGireGanhe) SalvarConfigGestor(redeID string, custo, minV, maxV float64, maxDia int, tz string, primeiroGratis bool, premiosAtivo bool, premios []repositorios.GireGanhePremioEspecial) error {
@@ -311,14 +361,21 @@ func (s *ServicoGireGanhe) GirarEU(rede, usuarioID string, r *modelos.Rede, agor
 	gratis := cfg.PrimeiroGiroGratisAtivo && total == 0
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	esp, valEsp := escolherPremioEspecial(cfg, rng)
+	esp, valEsp, espIdx := escolherPremioEspecial(cfg, rng)
+	slotsEspeciais := indicesSlotsEspeciais(len(cfg.PremiosEspeciais))
 	var slotIdx int
 	var premioBase float64
 	if esp {
 		premioBase = float64(int(math.Round(valEsp)))
-		slotIdx = rng.Intn(qtdSlotsRoleta)
+		if espIdx >= 0 && espIdx < len(slotsEspeciais) {
+			slotIdx = slotsEspeciais[espIdx]
+		} else if len(slotsEspeciais) > 0 {
+			slotIdx = slotsEspeciais[rng.Intn(len(slotsEspeciais))]
+		} else {
+			slotIdx = rng.Intn(qtdSlotsRoleta)
+		}
 	} else {
-		slotIdx = rng.Intn(qtdSlotsRoleta)
+		slotIdx = escolherSlotNormal(rng, slotsEspeciais)
 		premioBase = slotValor(cfg.PremioMinMoeda, cfg.PremioMaxMoeda, slotIdx)
 	}
 	mult := s.fatorMultMoedaUsuario(rede, usuarioID)
