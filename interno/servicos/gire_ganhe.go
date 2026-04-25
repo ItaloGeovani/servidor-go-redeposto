@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 const (
 	tipoRefGireCusto  = "gire_ganhe"
 	tipoRefGirePremio = "gire_ganhe_premio"
-	qtdSlotsRoleta    = 12
+	qtdSlotsNormais   = 10
 )
 
 var (
@@ -53,12 +54,15 @@ func (s *ServicoGireGanhe) fatorMultMoedaUsuario(rede, usuarioID string) float64
 	return s.niveis.FatorMultMoeda(rede, cod)
 }
 
-func slotValor(minV, maxV float64, idx int) float64 {
+func slotValor(minV, maxV float64, idx int, totalSlots int) float64 {
+	if totalSlots < 2 {
+		totalSlots = 2
+	}
 	if idx < 0 {
 		idx = 0
 	}
-	if idx > qtdSlotsRoleta-1 {
-		idx = qtdSlotsRoleta - 1
+	if idx > totalSlots-1 {
+		idx = totalSlots - 1
 	}
 	minI := int(math.Round(minV))
 	maxI := int(math.Round(maxV))
@@ -68,9 +72,116 @@ func slotValor(minV, maxV float64, idx int) float64 {
 	if maxI <= minI {
 		return float64(minI)
 	}
-	passo := float64(maxI-minI) / float64(qtdSlotsRoleta-1)
+	passo := float64(maxI-minI) / float64(totalSlots-1)
 	v := float64(minI) + passo*float64(idx)
 	return float64(int(math.Round(v)))
+}
+
+type setorRoleta struct {
+	Label      string
+	Percentual float64
+	Especial   bool
+	ValorMoeda float64
+}
+
+func roletaPersonalizadaAtiva(cfg *repositorios.RedeGireGanheConfig) bool {
+	if cfg == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(cfg.RoletaModo), "personalizado") && len(cfg.PremiosRoletaPersonalizada) > 0
+}
+
+func montarSetoresRoleta(cfg *repositorios.RedeGireGanheConfig) []setorRoleta {
+	if cfg == nil {
+		return []setorRoleta{}
+	}
+	if roletaPersonalizadaAtiva(cfg) {
+		out := make([]setorRoleta, 0, len(cfg.PremiosRoletaPersonalizada))
+		for _, p := range cfg.PremiosRoletaPersonalizada {
+			v := float64(int(math.Round(p.ValorMoedas)))
+			if v < 1 || p.Percentual <= 0 {
+				continue
+			}
+			out = append(out, setorRoleta{
+				Label:      strconv.Itoa(int(v)),
+				Percentual: p.Percentual,
+				Especial:   false,
+				ValorMoeda: v,
+			})
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	out := make([]setorRoleta, 0, qtdSlotsNormais+len(cfg.PremiosEspeciais))
+	totEsp := totalPercentPremiosEspeciais(cfg)
+	restante := 100 - totEsp
+	if restante < 0 {
+		restante = 0
+	}
+	pctNormal := restante / float64(qtdSlotsNormais)
+	for i := 0; i < qtdSlotsNormais; i++ {
+		v := slotValor(cfg.PremioMinMoeda, cfg.PremioMaxMoeda, i, qtdSlotsNormais)
+		out = append(out, setorRoleta{
+			Label:      strconv.Itoa(int(math.Round(v))),
+			Percentual: pctNormal,
+			Especial:   false,
+			ValorMoeda: v,
+		})
+	}
+	for _, p := range cfg.PremiosEspeciais {
+		v := float64(int(math.Round(p.ValorMoedas)))
+		if v <= 0 || p.Percentual <= 0 {
+			continue
+		}
+		out = append(out, setorRoleta{
+			Label:      strconv.Itoa(int(v)),
+			Percentual: p.Percentual,
+			Especial:   true,
+			ValorMoeda: v,
+		})
+	}
+	return out
+}
+
+func escolherSetorPorPeso(rng *rand.Rand, setores []setorRoleta) int {
+	if len(setores) == 0 {
+		return 0
+	}
+	var soma float64
+	for _, s := range setores {
+		if s.Percentual > 0 {
+			soma += s.Percentual
+		}
+	}
+	if soma <= 0 {
+		return rng.Intn(len(setores))
+	}
+	r := rng.Float64() * soma
+	var acc float64
+	for i, s := range setores {
+		if s.Percentual <= 0 {
+			continue
+		}
+		acc += s.Percentual
+		if r < acc {
+			return i
+		}
+	}
+	return len(setores) - 1
+}
+
+func setoresParaResposta(setores []setorRoleta) []map[string]any {
+	out := make([]map[string]any, 0, len(setores))
+	for _, s := range setores {
+		out = append(out, map[string]any{
+			"label":       s.Label,
+			"percentual":  s.Percentual,
+			"especial":    s.Especial,
+			"valor_moeda": s.ValorMoeda,
+		})
+	}
+	return out
 }
 
 func cicloDiaLocal(now time.Time, loc *time.Location) time.Time {
@@ -132,31 +243,8 @@ func totalPercentPremiosEspeciais(cfg *repositorios.RedeGireGanheConfig) float64
 	return t
 }
 
-func escolherPremioEspecial(cfg *repositorios.RedeGireGanheConfig, rng *rand.Rand) (hit bool, valor float64, idx int) {
-	if cfg == nil || !cfg.PremiosEspeciaisAtivo || len(cfg.PremiosEspeciais) == 0 {
-		return false, 0, -1
-	}
-	tot := totalPercentPremiosEspeciais(cfg)
-	if tot <= 0 {
-		return false, 0, -1
-	}
-	r := rng.Float64() * 100
-	if r >= tot {
-		return false, 0, -1
-	}
-	var acc float64
-	for i, p := range cfg.PremiosEspeciais {
-		acc += p.Percentual
-		if r < acc {
-			return true, p.ValorMoedas, i
-		}
-	}
-	last := len(cfg.PremiosEspeciais) - 1
-	return true, cfg.PremiosEspeciais[last].ValorMoedas, last
-}
-
 func premioEspecialMaxMoedas(cfg *repositorios.RedeGireGanheConfig) float64 {
-	if cfg == nil || len(cfg.PremiosEspeciais) == 0 {
+	if cfg == nil || roletaPersonalizadaAtiva(cfg) || len(cfg.PremiosEspeciais) == 0 {
 		return 0
 	}
 	var m float64
@@ -169,7 +257,7 @@ func premioEspecialMaxMoedas(cfg *repositorios.RedeGireGanheConfig) float64 {
 }
 
 func valoresPremiosEspeciaisMoedas(cfg *repositorios.RedeGireGanheConfig) []float64 {
-	if cfg == nil || len(cfg.PremiosEspeciais) == 0 {
+	if cfg == nil || roletaPersonalizadaAtiva(cfg) || len(cfg.PremiosEspeciais) == 0 {
 		return []float64{}
 	}
 	out := make([]float64, 0, len(cfg.PremiosEspeciais))
@@ -181,56 +269,42 @@ func valoresPremiosEspeciaisMoedas(cfg *repositorios.RedeGireGanheConfig) []floa
 	return out
 }
 
-func indicesSlotsEspeciais(qtd int) []int {
-	if qtd <= 0 {
-		return []int{}
+func normalizarRoletaPersonalizada(in []repositorios.GireGanhePremioEspecial) ([]repositorios.GireGanhePremioEspecial, error) {
+	var out []repositorios.GireGanhePremioEspecial
+	var soma float64
+	for _, p := range in {
+		pc := p.Percentual
+		if pc <= 0 || pc > 100 {
+			return nil, ErrDadosInvalidos
+		}
+		vi := int(math.Round(p.ValorMoedas))
+		if vi < 1 {
+			return nil, ErrDadosInvalidos
+		}
+		out = append(out, repositorios.GireGanhePremioEspecial{ValorMoedas: float64(vi), Percentual: pc})
+		soma += pc
 	}
-	if qtd >= qtdSlotsRoleta {
-		out := make([]int, 0, qtdSlotsRoleta)
-		for i := 0; i < qtdSlotsRoleta; i++ {
-			out = append(out, i)
-		}
-		return out
+	if len(out) < 1 {
+		return nil, ErrDadosInvalidos
 	}
-	out := make([]int, 0, qtd)
-	seen := map[int]bool{}
-	for i := 0; i < qtd; i++ {
-		idx := int(float64(i) * float64(qtdSlotsRoleta) / float64(qtd))
-		if idx < 0 {
-			idx = 0
-		}
-		if idx >= qtdSlotsRoleta {
-			idx = qtdSlotsRoleta - 1
-		}
-		if !seen[idx] {
-			seen[idx] = true
-			out = append(out, idx)
-		}
+	if math.Abs(soma-100) > 0.02 {
+		return nil, ErrDadosInvalidos
+	}
+	return out, nil
+}
+
+func premiosRoletaPersonalizadaParaResposta(cfg *repositorios.RedeGireGanheConfig) []map[string]any {
+	if cfg == nil || len(cfg.PremiosRoletaPersonalizada) == 0 {
+		return []map[string]any{}
+	}
+	out := make([]map[string]any, 0, len(cfg.PremiosRoletaPersonalizada))
+	for _, p := range cfg.PremiosRoletaPersonalizada {
+		out = append(out, map[string]any{"valor_moedas": p.ValorMoedas, "percentual": p.Percentual})
 	}
 	return out
 }
 
-func escolherSlotNormal(rng *rand.Rand, especiais []int) int {
-	if len(especiais) == 0 {
-		return rng.Intn(qtdSlotsRoleta)
-	}
-	bloq := map[int]bool{}
-	for _, idx := range especiais {
-		bloq[idx] = true
-	}
-	candidatos := make([]int, 0, qtdSlotsRoleta)
-	for i := 0; i < qtdSlotsRoleta; i++ {
-		if !bloq[i] {
-			candidatos = append(candidatos, i)
-		}
-	}
-	if len(candidatos) == 0 {
-		return rng.Intn(qtdSlotsRoleta)
-	}
-	return candidatos[rng.Intn(len(candidatos))]
-}
-
-func (s *ServicoGireGanhe) SalvarConfigGestor(redeID string, custo, minV, maxV float64, maxDia int, tz string, primeiroGratis bool, premiosAtivo bool, premios []repositorios.GireGanhePremioEspecial) error {
+func (s *ServicoGireGanhe) SalvarConfigGestor(redeID string, custo, minV, maxV float64, maxDia int, tz string, primeiroGratis bool, modo string, personal []repositorios.GireGanhePremioEspecial, premiosAtivo bool, premios []repositorios.GireGanhePremioEspecial) error {
 	if s == nil || s.repo == nil {
 		return errors.New("gire e ganhe indisponivel")
 	}
@@ -244,19 +318,42 @@ func (s *ServicoGireGanhe) SalvarConfigGestor(redeID string, custo, minV, maxV f
 	if _, err := time.LoadLocation(tz); err != nil {
 		return ErrDadosInvalidos
 	}
-	norm, err := normalizarPremiosEspeciaisEntrada(maxV, premiosAtivo, premios)
-	if err != nil {
-		return err
+	modoNorm := strings.ToLower(strings.TrimSpace(modo))
+	if modoNorm != "personalizado" {
+		modoNorm = "padrao"
+	}
+	var persNorm []repositorios.GireGanhePremioEspecial
+	var espNorm []repositorios.GireGanhePremioEspecial
+	var espAtivo bool
+	if modoNorm == "personalizado" {
+		var err error
+		persNorm, err = normalizarRoletaPersonalizada(personal)
+		if err != nil {
+			return err
+		}
+		espAtivo = false
+		espNorm = nil
+	} else {
+		modoNorm = "padrao"
+		persNorm = nil
+		var err error
+		espNorm, err = normalizarPremiosEspeciaisEntrada(maxV, premiosAtivo, premios)
+		if err != nil {
+			return err
+		}
+		espAtivo = premiosAtivo
 	}
 	return s.repo.SalvarConfig(redeID, &repositorios.RedeGireGanheConfig{
-		CustoMoedas:             custo,
-		PremioMinMoeda:          minV,
-		PremioMaxMoeda:          maxV,
-		GirosMaxDia:             maxDia,
-		Timezone:                tz,
-		PrimeiroGiroGratisAtivo: primeiroGratis,
-		PremiosEspeciaisAtivo:   premiosAtivo,
-		PremiosEspeciais:        norm,
+		CustoMoedas:                custo,
+		PremioMinMoeda:             minV,
+		PremioMaxMoeda:             maxV,
+		GirosMaxDia:                maxDia,
+		Timezone:                   tz,
+		PrimeiroGiroGratisAtivo:    primeiroGratis,
+		RoletaModo:                 modoNorm,
+		PremiosRoletaPersonalizada: persNorm,
+		PremiosEspeciaisAtivo:      espAtivo,
+		PremiosEspeciais:           espNorm,
 	})
 }
 
@@ -266,7 +363,7 @@ func (s *ServicoGireGanhe) ConfigPublicaParaRede(redeID string) map[string]any {
 		return nil
 	}
 	totEsp := totalPercentPremiosEspeciais(cfg)
-	ativo := cfg.PremiosEspeciaisAtivo && len(cfg.PremiosEspeciais) > 0 && totEsp > 0
+	ativo := !roletaPersonalizadaAtiva(cfg) && cfg.PremiosEspeciaisAtivo && len(cfg.PremiosEspeciais) > 0 && totEsp > 0
 	return map[string]any{
 		"gire_custo_moedas":                     cfg.CustoMoedas,
 		"gire_premio_min_moedas":                cfg.PremioMinMoeda,
@@ -277,6 +374,8 @@ func (s *ServicoGireGanhe) ConfigPublicaParaRede(redeID string) map[string]any {
 		"gire_premios_especiais_ativo":          ativo,
 		"gire_premio_especial_max_moedas":       premioEspecialMaxMoedas(cfg),
 		"gire_premio_especial_chance_total_pct": totEsp,
+		"gire_roleta_modo":                      strings.TrimSpace(cfg.RoletaModo),
+		"gire_premios_roleta_personalizada":     premiosRoletaPersonalizadaParaResposta(cfg),
 	}
 }
 
@@ -303,8 +402,12 @@ func (s *ServicoGireGanhe) EstadoEU(rede, usuarioID string, r *modelos.Rede, ago
 	}
 	gratis := cfg.PrimeiroGiroGratisAtivo && total == 0
 	mult := s.fatorMultMoedaUsuario(rede, usuarioID)
-	totEsp := totalPercentPremiosEspeciais(cfg)
-	espAtivo := cfg.PremiosEspeciaisAtivo && len(cfg.PremiosEspeciais) > 0 && totEsp > 0
+	totEsp := 0.0
+	if !roletaPersonalizadaAtiva(cfg) {
+		totEsp = totalPercentPremiosEspeciais(cfg)
+	}
+	espAtivo := !roletaPersonalizadaAtiva(cfg) && cfg.PremiosEspeciaisAtivo && len(cfg.PremiosEspeciais) > 0 && totEsp > 0
+	setores := montarSetoresRoleta(cfg)
 	return map[string]any{
 		"app_modulo_gire_ganhe":            true,
 		"moeda_virtual_nome":               strings.TrimSpace(r.MoedaVirtualNome),
@@ -319,11 +422,14 @@ func (s *ServicoGireGanhe) EstadoEU(rede, usuarioID string, r *modelos.Rede, ago
 		"pode_girar":                       hoje < cfg.GirosMaxDia,
 		"multiplicador_moeda_nivel":        mult,
 		"proximo_reset":                    proximoResetLocal(agora, loc).Format(time.RFC3339),
-		"slots":                            qtdSlotsRoleta,
+		"slots":                            len(setores),
+		"setores":                          setoresParaResposta(setores),
 		"premios_especiais_ativo":          espAtivo,
 		"premio_especial_max_moedas":       premioEspecialMaxMoedas(cfg),
 		"premio_especial_chance_total_pct": totEsp,
 		"premios_especiais_moedas":         valoresPremiosEspeciaisMoedas(cfg),
+		"roleta_modo":                      strings.TrimSpace(cfg.RoletaModo),
+		"premios_roleta_personalizada":     premiosRoletaPersonalizadaParaResposta(cfg),
 	}, nil
 }
 
@@ -361,23 +467,14 @@ func (s *ServicoGireGanhe) GirarEU(rede, usuarioID string, r *modelos.Rede, agor
 	gratis := cfg.PrimeiroGiroGratisAtivo && total == 0
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	esp, valEsp, espIdx := escolherPremioEspecial(cfg, rng)
-	slotsEspeciais := indicesSlotsEspeciais(len(cfg.PremiosEspeciais))
-	var slotIdx int
-	var premioBase float64
-	if esp {
-		premioBase = float64(int(math.Round(valEsp)))
-		if espIdx >= 0 && espIdx < len(slotsEspeciais) {
-			slotIdx = slotsEspeciais[espIdx]
-		} else if len(slotsEspeciais) > 0 {
-			slotIdx = slotsEspeciais[rng.Intn(len(slotsEspeciais))]
-		} else {
-			slotIdx = rng.Intn(qtdSlotsRoleta)
-		}
-	} else {
-		slotIdx = escolherSlotNormal(rng, slotsEspeciais)
-		premioBase = slotValor(cfg.PremioMinMoeda, cfg.PremioMaxMoeda, slotIdx)
+	setores := montarSetoresRoleta(cfg)
+	slotIdx := escolherSetorPorPeso(rng, setores)
+	if slotIdx < 0 || slotIdx >= len(setores) {
+		slotIdx = 0
 	}
+	setor := setores[slotIdx]
+	esp := setor.Especial
+	premioBase := setor.ValorMoeda
 	mult := s.fatorMultMoedaUsuario(rede, usuarioID)
 	premioCredito := float64(int(math.Round(premioBase * mult)))
 	if premioCredito < 0 {
@@ -436,7 +533,8 @@ func (s *ServicoGireGanhe) GirarEU(rede, usuarioID string, r *modelos.Rede, agor
 	return map[string]any{
 		"mensagem":                   "giro realizado",
 		"slot_index":                 slotIdx,
-		"slots":                      qtdSlotsRoleta,
+		"slots":                      len(setores),
+		"setores":                    setoresParaResposta(setores),
 		"premio_base_moedas":         premioBase,
 		"premio_creditado_moedas":    premioCredito,
 		"multiplicador_moeda_nivel":  mult,
@@ -448,5 +546,6 @@ func (s *ServicoGireGanhe) GirarEU(rede, usuarioID string, r *modelos.Rede, agor
 		"premio_min_moedas":          cfg.PremioMinMoeda,
 		"premio_max_moedas":          cfg.PremioMaxMoeda,
 		"premio_especial":            esp,
+		"roleta_modo":                strings.TrimSpace(cfg.RoletaModo),
 	}, nil
 }

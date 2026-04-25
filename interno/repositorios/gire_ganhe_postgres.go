@@ -16,14 +16,16 @@ type GireGanhePremioEspecial struct {
 }
 
 type RedeGireGanheConfig struct {
-	CustoMoedas             float64
-	PremioMinMoeda          float64
-	PremioMaxMoeda          float64
-	GirosMaxDia             int
-	Timezone                string
-	PrimeiroGiroGratisAtivo bool
-	PremiosEspeciaisAtivo   bool
-	PremiosEspeciais        []GireGanhePremioEspecial
+	CustoMoedas                float64
+	PremioMinMoeda             float64
+	PremioMaxMoeda             float64
+	GirosMaxDia                int
+	Timezone                   string
+	PrimeiroGiroGratisAtivo    bool
+	RoletaModo                 string
+	PremiosRoletaPersonalizada []GireGanhePremioEspecial
+	PremiosEspeciaisAtivo      bool
+	PremiosEspeciais           []GireGanhePremioEspecial
 }
 
 type GireGanheGiro struct {
@@ -56,6 +58,7 @@ func padraoGireConfig() *RedeGireGanheConfig {
 	return &RedeGireGanheConfig{
 		CustoMoedas: 10, PremioMinMoeda: 1, PremioMaxMoeda: 20, GirosMaxDia: 1,
 		Timezone: "America/Sao_Paulo", PrimeiroGiroGratisAtivo: true,
+		RoletaModo: "padrao", PremiosRoletaPersonalizada: nil,
 		PremiosEspeciaisAtivo: false, PremiosEspeciais: nil,
 	}
 }
@@ -70,15 +73,18 @@ func (r *gireGanhePostgres) BuscarConfig(redeID string) (*RedeGireGanheConfig, e
 	const q = `
 SELECT custo_moedas::float8, premio_min_moedas::float8, premio_max_moedas::float8, giros_max_dia, trim(timezone),
   COALESCE(primeiro_giro_gratis_ativo, true),
+  COALESCE(trim(roleta_modo), 'padrao'),
+  COALESCE(premios_roleta_personalizada, '[]'::jsonb),
   COALESCE(premios_especiais_ativo, false),
   COALESCE(premios_especiais, '[]'::jsonb)
 FROM rede_gire_ganhe_config
 WHERE rede_id = $1::uuid`
 	var c RedeGireGanheConfig
-	var raw []byte
+	var rawEsp []byte
+	var rawPers []byte
 	err := r.db.QueryRowContext(ctx, q, redeID).Scan(
 		&c.CustoMoedas, &c.PremioMinMoeda, &c.PremioMaxMoeda, &c.GirosMaxDia, &c.Timezone,
-		&c.PrimeiroGiroGratisAtivo, &c.PremiosEspeciaisAtivo, &raw,
+		&c.PrimeiroGiroGratisAtivo, &c.RoletaModo, &rawPers, &c.PremiosEspeciaisAtivo, &rawEsp,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return padraoGireConfig(), nil
@@ -86,8 +92,11 @@ WHERE rede_id = $1::uuid`
 	if err != nil {
 		return nil, err
 	}
-	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &c.PremiosEspeciais)
+	if len(rawEsp) > 0 {
+		_ = json.Unmarshal(rawEsp, &c.PremiosEspeciais)
+	}
+	if len(rawPers) > 0 {
+		_ = json.Unmarshal(rawPers, &c.PremiosRoletaPersonalizada)
 	}
 	if strings.TrimSpace(c.Timezone) == "" {
 		c.Timezone = "America/Sao_Paulo"
@@ -107,6 +116,12 @@ WHERE rede_id = $1::uuid`
 	if c.PremiosEspeciais == nil {
 		c.PremiosEspeciais = []GireGanhePremioEspecial{}
 	}
+	if c.PremiosRoletaPersonalizada == nil {
+		c.PremiosRoletaPersonalizada = []GireGanhePremioEspecial{}
+	}
+	if strings.TrimSpace(c.RoletaModo) == "" {
+		c.RoletaModo = "padrao"
+	}
 	return &c, nil
 }
 
@@ -118,15 +133,22 @@ func (r *gireGanhePostgres) SalvarConfig(redeID string, c *RedeGireGanheConfig) 
 	if c.PremiosEspeciais == nil {
 		c.PremiosEspeciais = []GireGanhePremioEspecial{}
 	}
-	raw, err := json.Marshal(c.PremiosEspeciais)
+	if c.PremiosRoletaPersonalizada == nil {
+		c.PremiosRoletaPersonalizada = []GireGanhePremioEspecial{}
+	}
+	rawEsp, err := json.Marshal(c.PremiosEspeciais)
+	if err != nil {
+		return err
+	}
+	rawPers, err := json.Marshal(c.PremiosRoletaPersonalizada)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	const up = `
-INSERT INTO rede_gire_ganhe_config (rede_id, custo_moedas, premio_min_moedas, premio_max_moedas, giros_max_dia, timezone, primeiro_giro_gratis_ativo, premios_especiais_ativo, premios_especiais)
-VALUES ($1::uuid, $2::numeric, $3::numeric, $4::numeric, $5, $6, $7, $8, $9::jsonb)
+INSERT INTO rede_gire_ganhe_config (rede_id, custo_moedas, premio_min_moedas, premio_max_moedas, giros_max_dia, timezone, primeiro_giro_gratis_ativo, roleta_modo, premios_roleta_personalizada, premios_especiais_ativo, premios_especiais)
+VALUES ($1::uuid, $2::numeric, $3::numeric, $4::numeric, $5, $6, $7, $8, $9::jsonb, $10, $11::jsonb)
 ON CONFLICT (rede_id) DO UPDATE SET
   custo_moedas = EXCLUDED.custo_moedas,
   premio_min_moedas = EXCLUDED.premio_min_moedas,
@@ -134,10 +156,12 @@ ON CONFLICT (rede_id) DO UPDATE SET
   giros_max_dia = EXCLUDED.giros_max_dia,
   timezone = EXCLUDED.timezone,
   primeiro_giro_gratis_ativo = EXCLUDED.primeiro_giro_gratis_ativo,
+  roleta_modo = EXCLUDED.roleta_modo,
+  premios_roleta_personalizada = EXCLUDED.premios_roleta_personalizada,
   premios_especiais_ativo = EXCLUDED.premios_especiais_ativo,
   premios_especiais = EXCLUDED.premios_especiais,
   atualizado_em = NOW()`
-	_, err = r.db.ExecContext(ctx, up, redeID, c.CustoMoedas, c.PremioMinMoeda, c.PremioMaxMoeda, c.GirosMaxDia, strings.TrimSpace(c.Timezone), c.PrimeiroGiroGratisAtivo, c.PremiosEspeciaisAtivo, raw)
+	_, err = r.db.ExecContext(ctx, up, redeID, c.CustoMoedas, c.PremioMinMoeda, c.PremioMaxMoeda, c.GirosMaxDia, strings.TrimSpace(c.Timezone), c.PrimeiroGiroGratisAtivo, strings.TrimSpace(c.RoletaModo), rawPers, c.PremiosEspeciaisAtivo, rawEsp)
 	return err
 }
 
@@ -177,7 +201,7 @@ func (r *gireGanhePostgres) InserirGiroTx(ctx context.Context, tx *sql.Tx, g *Gi
 	}
 	redeID, usuarioID = strings.TrimSpace(redeID), strings.TrimSpace(usuarioID)
 	g.ID = strings.TrimSpace(g.ID)
-	if redeID == "" || usuarioID == "" || g.ID == "" || g.NumeroNoDia < 1 || g.SlotIndex < 0 || g.SlotIndex > 11 {
+	if redeID == "" || usuarioID == "" || g.ID == "" || g.NumeroNoDia < 1 || g.SlotIndex < 0 || g.SlotIndex > 99 {
 		return errors.New("dados invalidos para giro")
 	}
 	const ins = `
