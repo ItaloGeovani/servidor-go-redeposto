@@ -31,13 +31,13 @@ type Aplicacao struct {
 }
 
 // verificarCaminhoContaFCM confirma no arranque que o JSON existe e e ficheiro (log no terminal).
-// Se FCM_SERVICE_ACCOUNT_PATH estiver vazio, nao e erro; push fica desativado.
+// Se FCM_SA (ou FCM_SERVICE_ACCOUNT_PATH) estiver vazio, nao e erro; push fica desativado.
 // Tenta varios candidatos: caminho do .env, CWD, pasta do executavel (hospedagem com CWD diferente da app).
 // Em sucesso, actualiza [cfg].FcmCaminhoContaServico para o caminho absoluto que abriu.
 func verificarCaminhoContaFCM(cfg *config.Config) error {
 	p := strings.TrimSpace(cfg.FcmCaminhoContaServico)
 	if p == "" {
-		log.Print("fcm: FCM_SERVICE_ACCOUNT_PATH nao definido; envio de push desativado")
+		log.Print("fcm: FCM_SA nao definido; envio de push desativado")
 		return nil
 	}
 	cands := candidatosCaminhoFcm(p)
@@ -74,7 +74,7 @@ func verificarCaminhoContaFCM(cfg *config.Config) error {
 	if len(cands) > 0 {
 		primeiro = cands[0]
 	}
-	log.Printf("fcm: AVISO: ficheiro nao encontrado; push FCM desativado. Carregue o JSON da conta de servico no servidor e reinicie, ou ajuste FCM_SERVICE_ACCOUNT_PATH. Tentou %d caminhos (ex.: %q)", len(cands), primeiro)
+	log.Printf("fcm: AVISO: ficheiro nao encontrado; push FCM desativado. Carregue o JSON da conta de servico no servidor e reinicie, ou ajuste FCM_SA. Tentou %d caminhos (ex.: %q)", len(cands), primeiro)
 	cfg.FcmCaminhoContaServico = ""
 	return nil
 }

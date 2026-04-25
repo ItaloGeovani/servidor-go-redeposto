@@ -1,6 +1,7 @@
 # Inclua servidor-go/assets/ no Git apos `npm run build:deploy` em painel-web-react (ou rode scripts/prepare-painel-web.sh).
 
 # Conta de serviço Firebase (FCM no servidor) — nunca commitar.
+fcm-sa.json
 *-firebase-adminsdk-*.json
 niocard-*-firebase-adminsdk-*.json
 **/secrets/

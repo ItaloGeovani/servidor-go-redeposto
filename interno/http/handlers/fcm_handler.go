@@ -72,7 +72,7 @@ func (h *Handlers) PostFcmTeste(w http.ResponseWriter, r *http.Request) {
 	}
 	cred := strings.TrimSpace(h.cfg.FcmCaminhoContaServico)
 	if cred == "" {
-		utils.ResponderErro(w, http.StatusServiceUnavailable, "push nao configurado no servidor (FCM_SERVICE_ACCOUNT_PATH)")
+		utils.ResponderErro(w, http.StatusServiceUnavailable, "push nao configurado no servidor (defina FCM_SA)")
 		return
 	}
 	tokens, err := h.usuarioRedeService.ListarTokensFCM(u.IDUsuario)

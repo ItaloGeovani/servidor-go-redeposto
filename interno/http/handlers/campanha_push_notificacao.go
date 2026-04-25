@@ -34,7 +34,7 @@ func (h *Handlers) notificarClientesPushNovaCampanha(c *modelos.Campanha) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		if strings.TrimSpace(h.cfg.FcmCaminhoContaServico) == "" {
-			log.Printf("fcm campanha: nao enviado (defina FCM_SERVICE_ACCOUNT_PATH no .env e reinicie o servidor)")
+			log.Printf("fcm campanha: nao enviado (defina FCM_SA no .env e reinicie o servidor)")
 			return
 		}
 		tokens, err := h.usuarioRedeService.ListarTokensFCMClientesRede(idRede)

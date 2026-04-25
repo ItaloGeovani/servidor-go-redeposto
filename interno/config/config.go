@@ -12,7 +12,7 @@ import (
 
 type Config struct {
 	Ambiente              string
-	// FcmCaminhoContaServico: JSON da conta de serviço do Firebase (envio de push FCM v1). Vazio = não envia.
+	// FcmCaminhoContaServico: JSON da conta de serviço do Firebase (env FCM_SA ou legado FCM_SERVICE_ACCOUNT_PATH). Vazio = não envia.
 	FcmCaminhoContaServico string
 	PortaHTTP      int
 	// PastaPainelWeb: absoluta ou relativa com index.html do painel (PAINEL_WEB_ASSETS). Vazio = auto.
@@ -31,7 +31,7 @@ type Config struct {
 
 func Carregar() Config {
 	fcm := resolverCaminhoContaFCM(
-		strings.TrimSpace(utils.ObterEnv("FCM_SERVICE_ACCOUNT_PATH", utils.ObterEnv("GOOGLE_APPLICATION_CREDENTIALS", ""))),
+		strings.TrimSpace(utils.ObterEnv("FCM_SA", utils.ObterEnv("FCM_SERVICE_ACCOUNT_PATH", utils.ObterEnv("GOOGLE_APPLICATION_CREDENTIALS", "")))),
 		strings.TrimSpace(utils.ObterEnv("FCM_BASE_DIR", "")),
 	)
 	return Config{

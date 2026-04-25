@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	fcmClientMu  sync.Mutex
-	fcmClient    *messaging.Client
-	credPathUso  string
+	fcmClientMu sync.Mutex
+	fcmClient   *messaging.Client
+	credPathUso string
 )
 
 func fcmMensageria(ctx context.Context, cred string) (*messaging.Client, error) {
@@ -46,7 +46,7 @@ func fcmMensageria(ctx context.Context, cred string) (*messaging.Client, error) 
 }
 
 // EnviarVoucherAprovado push quando o pagamento do voucher no Mercado Pago é aprovado.
-// [cred] é o caminho do JSON da conta de serviço Firebase (env FCM_SERVICE_ACCOUNT_PATH).
+// [cred] é o caminho do JSON da conta de serviço Firebase (env FCM_SA).
 func EnviarVoucherAprovado(ctx context.Context, cred string, tokens []string, idCompra, codigo, valorReais string) {
 	if cred == "" || len(tokens) == 0 {
 		return
@@ -68,14 +68,14 @@ func EnviarVoucherAprovado(ctx context.Context, cred string, tokens []string, id
 		req := &messaging.MulticastMessage{
 			Tokens: batch,
 			Notification: &messaging.Notification{
-				Title:    "Voucher aprovado",
-				Body:     fmt.Sprintf("Seu pagamento de R$ %s foi confirmado. Abra o app para resgatar.", valorReais),
+				Title: "Voucher aprovado",
+				Body:  fmt.Sprintf("Seu pagamento de R$ %s foi confirmado. Abra o app para resgatar.", valorReais),
 			},
 			Data: map[string]string{
-				"tipo":        "voucher_ativo",
-				"id":          idCompra,
-				"codigo":      codigo,
-				"valor":       valorReais,
+				"tipo":       "voucher_ativo",
+				"id":         idCompra,
+				"codigo":     codigo,
+				"valor":      valorReais,
 				"abrir_tela": "vouchers",
 			},
 		}
@@ -127,10 +127,10 @@ func EnviarNovaCampanhaNoApp(ctx context.Context, cred string, tokens []string, 
 				Body:  tit,
 			},
 			Data: map[string]string{
-				"tipo":         "nova_campanha_app",
-				"id_campanha":  cid,
-				"id_rede":      rid,
-				"abrir_tela":   "promocoes",
+				"tipo":        "nova_campanha_app",
+				"id_campanha": cid,
+				"id_rede":     rid,
+				"abrir_tela":  "promocoes",
 			},
 		}
 		br, err := c.SendEachForMulticast(ctx, req)
@@ -150,7 +150,7 @@ func EnviarNovaCampanhaNoApp(ctx context.Context, cred string, tokens []string, 
 // Devolve o numero de envios com sucesso no lote; pode ser < len(tokens) se algum token for invalido.
 func EnviarTeste(ctx context.Context, cred string, tokens []string) (int, int, error) {
 	if cred == "" {
-		return 0, 0, fmt.Errorf("credenciais fcm nao configuradas (FCM_SERVICE_ACCOUNT_PATH)")
+		return 0, 0, fmt.Errorf("credenciais fcm nao configuradas (defina FCM_SA)")
 	}
 	if len(tokens) == 0 {
 		return 0, 0, nil
@@ -177,8 +177,8 @@ func EnviarTeste(ctx context.Context, cred string, tokens []string) (int, int, e
 				Body:  "Se recebeu isto, o push (FCM) esta a funcionar.",
 			},
 			Data: map[string]string{
-				"tipo":         "fcm_teste",
-				"abrir_tela":   "voucher",
+				"tipo":       "fcm_teste",
+				"abrir_tela": "voucher",
 			},
 		}
 		br, err := c.SendEachForMulticast(ctx, req)
