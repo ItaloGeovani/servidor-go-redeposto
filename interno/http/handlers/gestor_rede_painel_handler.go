@@ -201,6 +201,19 @@ func (h *Handlers) EditarCampanhaGestorRede(w http.ResponseWriter, r *http.Reque
 		utils.ResponderErro(w, http.StatusBadRequest, "vigencia_inicio e vigencia_fim devem ser ISO8601 (RFC3339)")
 		return
 	}
+	ant, err := h.campanhaService.BuscarPorIDeRede(req.ID, idRede)
+	if err != nil {
+		if errors.Is(err, repositorios.ErrCampanhaNaoEncontrada) {
+			utils.ResponderErro(w, http.StatusNotFound, "campanha nao encontrada")
+			return
+		}
+		log.Printf("editar campanha gestor: buscar: %v", err)
+		utils.ResponderJSON(w, http.StatusInternalServerError, map[string]string{
+			"erro":    "falha ao carregar campanha",
+			"detalhe": err.Error(),
+		})
+		return
+	}
 	err = h.campanhaService.Atualizar(servicos.AtualizarCampanhaInput{
 		ID:                  req.ID,
 		IDRede:              req.IDRede,
@@ -242,6 +255,12 @@ func (h *Handlers) EditarCampanhaGestorRede(w http.ResponseWriter, r *http.Reque
 			})
 		}
 		return
+	}
+	nova, errC := h.campanhaService.BuscarPorIDeRede(req.ID, idRede)
+	if errC == nil {
+		h.notificarClientesSeCampanhaAtivada(ant, nova)
+	} else {
+		log.Printf("editar campanha gestor: recarregar apos gravar: %v", errC)
 	}
 	utils.ResponderJSON(w, http.StatusOK, map[string]any{
 		"mensagem": "campanha atualizada com sucesso",

@@ -60,3 +60,25 @@ func (h *Handlers) notificarClientesPushNovaCampanha(c *modelos.Campanha) {
 		notificacoes.EnviarNovaCampanhaNoApp(ctx, h.cfg.FcmCaminhoContaServico, tokens, c.ID, titulo, idRede)
 	}()
 }
+
+// campanhaAgoraAtivaNoApp: o estado novo e ATIVA+app, e antes nao era (ex.: pausa, rascunho, ou desligou app e religou).
+func campanhaAgoraAtivaNoApp(antiga, nova *modelos.Campanha) bool {
+	if antiga == nil || nova == nil {
+		return false
+	}
+	if nova.Status != modelos.StatusCampanhaAtiva || !nova.ValidaNoApp {
+		return false
+	}
+	if antiga.Status == modelos.StatusCampanhaAtiva && antiga.ValidaNoApp {
+		return false
+	}
+	return true
+}
+
+// notificarClientesSeCampanhaAtivada dispara o mesmo FCM de criacao ao reativar/editar para ATIVA.
+func (h *Handlers) notificarClientesSeCampanhaAtivada(antiga, nova *modelos.Campanha) {
+	if !campanhaAgoraAtivaNoApp(antiga, nova) {
+		return
+	}
+	h.notificarClientesPushNovaCampanha(nova)
+}

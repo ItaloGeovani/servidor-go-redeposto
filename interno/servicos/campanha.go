@@ -12,6 +12,7 @@ import (
 
 type ServicoCampanha interface {
 	ListarPorRedeID(idRede string) ([]*modelos.Campanha, error)
+	BuscarPorIDeRede(idCampanha, idRede string) (*modelos.Campanha, error)
 	Criar(sessaoCriador string, in CriarCampanhaInput) (*modelos.Campanha, error)
 	Atualizar(in AtualizarCampanhaInput) error
 }
@@ -65,6 +66,7 @@ type AtualizarCampanhaInput struct {
 
 type campanhaRepo interface {
 	ListarPorRedeID(idRede string) ([]*modelos.Campanha, error)
+	BuscarPorIDeRede(idCampanha, idRede string) (*modelos.Campanha, error)
 	Criar(sessaoCriador string, c *modelos.Campanha) error
 	Atualizar(c *modelos.Campanha) error
 	PostoPertenceARede(idPosto, idRede string) (bool, error)
@@ -78,6 +80,10 @@ type servicoCampanha struct {
 
 func NovoServicoCampanha(repo campanhaRepo, repoRede repositorios.RedeRepositorio, repoComb repositorios.CombustivelRedeRepositorio) ServicoCampanha {
 	return &servicoCampanha{repo: repo, repoRede: repoRede, repoComb: repoComb}
+}
+
+func (s *servicoCampanha) BuscarPorIDeRede(idCampanha, idRede string) (*modelos.Campanha, error) {
+	return s.repo.BuscarPorIDeRede(idCampanha, idRede)
 }
 
 func validarURLImagem(s string) bool {

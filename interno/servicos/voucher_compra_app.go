@@ -15,18 +15,19 @@ import (
 	"gaspass-servidor/interno/modelos"
 	"gaspass-servidor/interno/notificacoes"
 	"gaspass-servidor/interno/repositorios"
+
 	"github.com/google/uuid"
 	"github.com/mercadopago/sdk-go/pkg/payment"
 )
 
 const (
-	prefixoRefVoucherCompra = "vcompra:"
+	prefixoRefVoucherCompra           = "vcompra:"
 	defaultMinutosPagamentoPixVoucher = 30
-	defaultDiasValidadeResgateVoucher  = 7
-	minDiasVoucherResgate            = 1
-	maxDiasVoucherResgate            = 365
-	minMinutosVoucherPix             = 5
-	maxMinutosVoucherPix             = 10080
+	defaultDiasValidadeResgateVoucher = 7
+	minDiasVoucherResgate             = 1
+	maxDiasVoucherResgate             = 365
+	minMinutosVoucherPix              = 5
+	maxMinutosVoucherPix              = 10080
 )
 
 // ErrVoucherCampanhaInvalida campanha inexistente ou não aplicável.

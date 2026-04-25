@@ -182,6 +182,99 @@ ORDER BY c.vigencia_inicio DESC NULLS LAST, c.criado_em DESC`
 	return lista, nil
 }
 
+// BuscarPorIDeRede retorna a campanha; ErrCampanhaNaoEncontrada se o id nao for da rede.
+func (r *campanhaPostgres) BuscarPorIDeRede(idCampanha, idRede string) (*modelos.Campanha, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	idCampanha = strings.TrimSpace(idCampanha)
+	idRede = strings.TrimSpace(idRede)
+	if idCampanha == "" || idRede == "" {
+		return nil, ErrCampanhaNaoEncontrada
+	}
+	const q = `
+SELECT
+  c.id::text,
+  c.rede_id::text,
+  c.nome,
+  COALESCE(c.titulo, ''),
+  COALESCE(c.descricao, ''),
+  COALESCE(c.imagem_url, ''),
+  COALESCE(c.posto_id::text, ''),
+  c.status::text,
+  c.vigencia_inicio,
+  c.vigencia_fim,
+  c.valida_no_app,
+  c.valida_no_posto_fisico,
+  c.modalidade_desconto,
+  c.base_desconto,
+  c.valor_desconto::float8,
+  c.valor_minimo_compra::float8,
+  c.valor_maximo_compra::float8,
+  c.max_usos_por_cliente,
+  c.litros_min::float8,
+  c.litros_max::float8,
+  c.criado_por::text,
+  c.criado_em,
+  c.atualizado_em
+FROM campanhas c
+WHERE c.id = $1::uuid AND c.rede_id = $2::uuid
+LIMIT 1`
+	var c modelos.Campanha
+	var vigIni, vigFim sql.NullTime
+	var maxUsos sql.NullInt64
+	var vMaxCompra sql.NullFloat64
+	var litMin, litMax sql.NullFloat64
+	err := r.db.QueryRowContext(ctx, q, idCampanha, idRede).Scan(
+		&c.ID, &c.IDRede, &c.Nome, &c.Titulo, &c.Descricao, &c.ImagemURL,
+		&c.IDPosto, &c.Status, &vigIni, &vigFim,
+		&c.ValidaNoApp, &c.ValidaNoPostoFisico,
+		&c.ModalidadeDesconto, &c.BaseDesconto,
+		&c.ValorDesconto, &c.ValorMinimoCompra, &vMaxCompra,
+		&maxUsos,
+		&litMin, &litMax,
+		&c.CriadoPor, &c.CriadoEm, &c.AtualizadoEm,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrCampanhaNaoEncontrada
+	}
+	if err != nil {
+		return nil, err
+	}
+	if vigIni.Valid {
+		t := vigIni.Time
+		c.VigenciaInicio = &t
+	}
+	if vigFim.Valid {
+		t := vigFim.Time
+		c.VigenciaFim = &t
+	}
+	if maxUsos.Valid {
+		v := int(maxUsos.Int64)
+		c.MaxUsosPorCliente = &v
+	}
+	if litMin.Valid {
+		v := litMin.Float64
+		c.LitrosMin = &v
+	}
+	if litMax.Valid {
+		v := litMax.Float64
+		c.LitrosMax = &v
+	}
+	if vMaxCompra.Valid {
+		v := vMaxCompra.Float64
+		c.ValorMaximoCompra = &v
+	}
+	preencherTituloExibicaoEscopo(&c)
+	m, err := r.mapaCombustiveisCampanhas(ctx, []string{c.ID})
+	if err != nil {
+		return nil, err
+	}
+	if ids, ok := m[c.ID]; ok {
+		c.IDsCombustiveisRede = ids
+	}
+	return &c, nil
+}
+
 func (r *campanhaPostgres) mapaCombustiveisCampanhas(ctx context.Context, idsCampanha []string) (map[string][]string, error) {
 	out := make(map[string][]string)
 	if len(idsCampanha) == 0 {
