@@ -167,6 +167,19 @@ func premioEspecialMaxMoedas(cfg *repositorios.RedeGireGanheConfig) float64 {
 	return m
 }
 
+func valoresPremiosEspeciaisMoedas(cfg *repositorios.RedeGireGanheConfig) []float64 {
+	if cfg == nil || len(cfg.PremiosEspeciais) == 0 {
+		return []float64{}
+	}
+	out := make([]float64, 0, len(cfg.PremiosEspeciais))
+	for _, p := range cfg.PremiosEspeciais {
+		if p.ValorMoedas > 0 {
+			out = append(out, p.ValorMoedas)
+		}
+	}
+	return out
+}
+
 func (s *ServicoGireGanhe) SalvarConfigGestor(redeID string, custo, minV, maxV float64, maxDia int, tz string, primeiroGratis bool, premiosAtivo bool, premios []repositorios.GireGanhePremioEspecial) error {
 	if s == nil || s.repo == nil {
 		return errors.New("gire e ganhe indisponivel")
@@ -260,6 +273,7 @@ func (s *ServicoGireGanhe) EstadoEU(rede, usuarioID string, r *modelos.Rede, ago
 		"premios_especiais_ativo":          espAtivo,
 		"premio_especial_max_moedas":       premioEspecialMaxMoedas(cfg),
 		"premio_especial_chance_total_pct": totEsp,
+		"premios_especiais_moedas":         valoresPremiosEspeciaisMoedas(cfg),
 	}, nil
 }
 
