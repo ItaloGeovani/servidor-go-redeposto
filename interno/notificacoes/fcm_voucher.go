@@ -65,11 +65,12 @@ func EnviarVoucherAprovado(ctx context.Context, cred string, tokens []string, id
 			j = len(tokens)
 		}
 		batch := tokens[i:j]
+		corpoVoucher := fmt.Sprintf("Seu pagamento de R$ %s foi confirmado. Abra o app para resgatar.", valorReais)
 		req := &messaging.MulticastMessage{
 			Tokens: batch,
 			Notification: &messaging.Notification{
 				Title: "Voucher aprovado",
-				Body:  fmt.Sprintf("Seu pagamento de R$ %s foi confirmado. Abra o app para resgatar.", valorReais),
+				Body:  corpoVoucher,
 			},
 			Data: map[string]string{
 				"tipo":       "voucher_ativo",
@@ -77,6 +78,8 @@ func EnviarVoucherAprovado(ctx context.Context, cred string, tokens []string, id
 				"codigo":     codigo,
 				"valor":      valorReais,
 				"abrir_tela": "vouchers",
+				"titulo":     "Voucher aprovado",
+				"corpo":      corpoVoucher,
 			},
 		}
 		br, err := c.SendEachForMulticast(ctx, req)
@@ -127,10 +130,12 @@ func EnviarNovaCampanhaNoApp(ctx context.Context, cred string, tokens []string, 
 				Body:  tit,
 			},
 			Data: map[string]string{
-				"tipo":        "nova_campanha_app",
-				"id_campanha": cid,
-				"id_rede":     rid,
-				"abrir_tela":  "promocoes",
+				"tipo":         "nova_campanha_app",
+				"id_campanha":  cid,
+				"id_rede":      rid,
+				"abrir_tela":   "promocoes",
+				"titulo":       "Nova promocao",
+				"corpo":        tit,
 			},
 		}
 		br, err := c.SendEachForMulticast(ctx, req)
@@ -178,7 +183,66 @@ func EnviarTeste(ctx context.Context, cred string, tokens []string) (int, int, e
 			},
 			Data: map[string]string{
 				"tipo":       "fcm_teste",
-				"abrir_tela": "voucher",
+				"abrir_tela": "modal",
+				"titulo":     "Teste de notificacao",
+				"corpo":      "Se recebeu isto, o push (FCM) esta a funcionar.",
+			},
+		}
+		br, err := c.SendEachForMulticast(ctx, req)
+		if err != nil {
+			return ok, fal, err
+		}
+		ok += br.SuccessCount
+		fal += br.FailureCount
+	}
+	return ok, fal, nil
+}
+
+// EnviarTesteRede envia notificacao de teste a todos os clientes (tokens FCM) da rede — titulo/corpo personalizaveis.
+func EnviarTesteRede(ctx context.Context, cred string, tokens []string, idRede, titulo, corpo string) (int, int, error) {
+	if cred == "" {
+		return 0, 0, fmt.Errorf("credenciais fcm nao configuradas (defina FCM_SA)")
+	}
+	if len(tokens) == 0 {
+		return 0, 0, nil
+	}
+	c, err := fcmMensageria(ctx, cred)
+	if err != nil {
+		return 0, 0, err
+	}
+	if c == nil {
+		return 0, 0, fmt.Errorf("cliente fcm nulo")
+	}
+	tit := strings.TrimSpace(titulo)
+	if tit == "" {
+		tit = "Teste de notificacao"
+	}
+	corp := strings.TrimSpace(corpo)
+	if corp == "" {
+		corp = "Mensagem de teste do painel."
+	}
+	rid := strings.TrimSpace(idRede)
+	ok := 0
+	fal := 0
+	for i := 0; i < len(tokens); i += 500 {
+		j := i + 500
+		if j > len(tokens) {
+			j = len(tokens)
+		}
+		batch := tokens[i:j]
+		req := &messaging.MulticastMessage{
+			Tokens: batch,
+			Notification: &messaging.Notification{
+				Title: tit,
+				Body:  corp,
+			},
+			Data: map[string]string{
+				"tipo":         "fcm_teste_painel",
+				"abrir_tela":   "modal",
+				"titulo":       tit,
+				"corpo":        corp,
+				"id_rede":      rid,
+				"origem":       "painel",
 			},
 		}
 		br, err := c.SendEachForMulticast(ctx, req)
