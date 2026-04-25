@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"gaspass-servidor/interno/repositorios"
 	"gaspass-servidor/interno/servicos"
 	"gaspass-servidor/utils"
 )
@@ -35,6 +36,10 @@ func (h *Handlers) getGireGanheConfigGestor(w http.ResponseWriter, r *http.Reque
 		utils.ResponderErro(w, http.StatusInternalServerError, "falha ao carregar configuracao")
 		return
 	}
+	premios := make([]map[string]any, 0, len(cfg.PremiosEspeciais))
+	for _, p := range cfg.PremiosEspeciais {
+		premios = append(premios, map[string]any{"valor_moedas": p.ValorMoedas, "percentual": p.Percentual})
+	}
 	utils.ResponderJSON(w, http.StatusOK, map[string]any{
 		"custo_moedas":               cfg.CustoMoedas,
 		"premio_min_moedas":          cfg.PremioMinMoeda,
@@ -42,6 +47,8 @@ func (h *Handlers) getGireGanheConfigGestor(w http.ResponseWriter, r *http.Reque
 		"giros_max_dia":              cfg.GirosMaxDia,
 		"timezone":                   strings.TrimSpace(cfg.Timezone),
 		"primeiro_giro_gratis_ativo": cfg.PrimeiroGiroGratisAtivo,
+		"premios_especiais_ativo":    cfg.PremiosEspeciaisAtivo,
+		"premios_especiais":          premios,
 	})
 }
 
@@ -52,6 +59,11 @@ type reqGireGanheConfig struct {
 	GirosMaxDia             int     `json:"giros_max_dia"`
 	Timezone                string  `json:"timezone"`
 	PrimeiroGiroGratisAtivo bool    `json:"primeiro_giro_gratis_ativo"`
+	PremiosEspeciaisAtivo   bool    `json:"premios_especiais_ativo"`
+	PremiosEspeciais        []struct {
+		ValorMoedas float64 `json:"valor_moedas"`
+		Percentual  float64 `json:"percentual"`
+	} `json:"premios_especiais"`
 }
 
 func (h *Handlers) patchGireGanheConfigGestor(w http.ResponseWriter, r *http.Request) {
@@ -69,15 +81,26 @@ func (h *Handlers) patchGireGanheConfigGestor(w http.ResponseWriter, r *http.Req
 		return
 	}
 	tz := strings.TrimSpace(req.Timezone)
-	if err := h.gireGanhe.SalvarConfigGestor(idRede, req.CustoMoedas, req.PremioMinMoedas, req.PremioMaxMoedas, req.GirosMaxDia, tz, req.PrimeiroGiroGratisAtivo); err != nil {
+	var premios []repositorios.GireGanhePremioEspecial
+	for _, row := range req.PremiosEspeciais {
+		premios = append(premios, repositorios.GireGanhePremioEspecial{
+			ValorMoedas: row.ValorMoedas,
+			Percentual:  row.Percentual,
+		})
+	}
+	if err := h.gireGanhe.SalvarConfigGestor(idRede, req.CustoMoedas, req.PremioMinMoedas, req.PremioMaxMoedas, req.GirosMaxDia, tz, req.PrimeiroGiroGratisAtivo, req.PremiosEspeciaisAtivo, premios); err != nil {
 		if errors.Is(err, servicos.ErrDadosInvalidos) {
-			utils.ResponderErro(w, http.StatusBadRequest, "custo > 0, premio_max >= premio_min >= 0, giros_max_dia >= 1 e timezone valido")
+			utils.ResponderErro(w, http.StatusBadRequest, "confira custo, faixa de premio, timezone, giros por dia; premios especiais: soma dos percentuais <= 100, cada valor inteiro > premio max, com recurso ativo exija ao menos uma linha valida")
 			return
 		}
 		utils.ResponderErro(w, http.StatusInternalServerError, "falha ao salvar")
 		return
 	}
 	cfg, _ := h.gireGanhe.BuscarConfigGestor(idRede)
+	premiosOut := make([]map[string]any, 0, len(cfg.PremiosEspeciais))
+	for _, p := range cfg.PremiosEspeciais {
+		premiosOut = append(premiosOut, map[string]any{"valor_moedas": p.ValorMoedas, "percentual": p.Percentual})
+	}
 	utils.ResponderJSON(w, http.StatusOK, map[string]any{
 		"mensagem":                   "configuracao do gire e ganhe salva",
 		"custo_moedas":               cfg.CustoMoedas,
@@ -86,5 +109,7 @@ func (h *Handlers) patchGireGanheConfigGestor(w http.ResponseWriter, r *http.Req
 		"giros_max_dia":              cfg.GirosMaxDia,
 		"timezone":                   cfg.Timezone,
 		"primeiro_giro_gratis_ativo": cfg.PrimeiroGiroGratisAtivo,
+		"premios_especiais_ativo":    cfg.PremiosEspeciaisAtivo,
+		"premios_especiais":          premiosOut,
 	})
 }

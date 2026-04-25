@@ -60,12 +60,17 @@ func slotValor(minV, maxV float64, idx int) float64 {
 	if idx > qtdSlotsRoleta-1 {
 		idx = qtdSlotsRoleta - 1
 	}
-	if maxV <= minV {
-		return minV
+	minI := int(math.Round(minV))
+	maxI := int(math.Round(maxV))
+	if maxI < minI {
+		maxI = minI
 	}
-	passo := (maxV - minV) / float64(qtdSlotsRoleta-1)
-	v := minV + passo*float64(idx)
-	return math.Round(v*100) / 100
+	if maxI <= minI {
+		return float64(minI)
+	}
+	passo := float64(maxI-minI) / float64(qtdSlotsRoleta-1)
+	v := float64(minI) + passo*float64(idx)
+	return float64(int(math.Round(v)))
 }
 
 func cicloDiaLocal(now time.Time, loc *time.Location) time.Time {
@@ -87,7 +92,82 @@ func (s *ServicoGireGanhe) BuscarConfigGestor(redeID string) (*repositorios.Rede
 	return s.repo.BuscarConfig(redeID)
 }
 
-func (s *ServicoGireGanhe) SalvarConfigGestor(redeID string, custo, minV, maxV float64, maxDia int, tz string, primeiroGratis bool) error {
+func normalizarPremiosEspeciaisEntrada(maxMoedas float64, ativo bool, in []repositorios.GireGanhePremioEspecial) ([]repositorios.GireGanhePremioEspecial, error) {
+	maxI := int(math.Round(maxMoedas))
+	var out []repositorios.GireGanhePremioEspecial
+	var soma float64
+	for _, p := range in {
+		v := p.ValorMoedas
+		pc := p.Percentual
+		if pc <= 0 || pc > 100 || v <= 0 {
+			continue
+		}
+		vi := int(math.Round(v))
+		if vi <= maxI {
+			if ativo {
+				return nil, ErrDadosInvalidos
+			}
+			continue
+		}
+		out = append(out, repositorios.GireGanhePremioEspecial{ValorMoedas: float64(vi), Percentual: pc})
+		soma += pc
+	}
+	if soma > 100+1e-6 {
+		return nil, ErrDadosInvalidos
+	}
+	if ativo && len(out) == 0 {
+		return nil, ErrDadosInvalidos
+	}
+	return out, nil
+}
+
+func totalPercentPremiosEspeciais(cfg *repositorios.RedeGireGanheConfig) float64 {
+	if cfg == nil {
+		return 0
+	}
+	var t float64
+	for _, p := range cfg.PremiosEspeciais {
+		t += p.Percentual
+	}
+	return t
+}
+
+func escolherPremioEspecial(cfg *repositorios.RedeGireGanheConfig, rng *rand.Rand) (hit bool, valor float64) {
+	if cfg == nil || !cfg.PremiosEspeciaisAtivo || len(cfg.PremiosEspeciais) == 0 {
+		return false, 0
+	}
+	tot := totalPercentPremiosEspeciais(cfg)
+	if tot <= 0 {
+		return false, 0
+	}
+	r := rng.Float64() * 100
+	if r >= tot {
+		return false, 0
+	}
+	var acc float64
+	for _, p := range cfg.PremiosEspeciais {
+		acc += p.Percentual
+		if r < acc {
+			return true, p.ValorMoedas
+		}
+	}
+	return true, cfg.PremiosEspeciais[len(cfg.PremiosEspeciais)-1].ValorMoedas
+}
+
+func premioEspecialMaxMoedas(cfg *repositorios.RedeGireGanheConfig) float64 {
+	if cfg == nil || len(cfg.PremiosEspeciais) == 0 {
+		return 0
+	}
+	var m float64
+	for _, p := range cfg.PremiosEspeciais {
+		if p.ValorMoedas > m {
+			m = p.ValorMoedas
+		}
+	}
+	return m
+}
+
+func (s *ServicoGireGanhe) SalvarConfigGestor(redeID string, custo, minV, maxV float64, maxDia int, tz string, primeiroGratis bool, premiosAtivo bool, premios []repositorios.GireGanhePremioEspecial) error {
 	if s == nil || s.repo == nil {
 		return errors.New("gire e ganhe indisponivel")
 	}
@@ -101,6 +181,10 @@ func (s *ServicoGireGanhe) SalvarConfigGestor(redeID string, custo, minV, maxV f
 	if _, err := time.LoadLocation(tz); err != nil {
 		return ErrDadosInvalidos
 	}
+	norm, err := normalizarPremiosEspeciaisEntrada(maxV, premiosAtivo, premios)
+	if err != nil {
+		return err
+	}
 	return s.repo.SalvarConfig(redeID, &repositorios.RedeGireGanheConfig{
 		CustoMoedas:             custo,
 		PremioMinMoeda:          minV,
@@ -108,6 +192,8 @@ func (s *ServicoGireGanhe) SalvarConfigGestor(redeID string, custo, minV, maxV f
 		GirosMaxDia:             maxDia,
 		Timezone:                tz,
 		PrimeiroGiroGratisAtivo: primeiroGratis,
+		PremiosEspeciaisAtivo:   premiosAtivo,
+		PremiosEspeciais:        norm,
 	})
 }
 
@@ -116,13 +202,18 @@ func (s *ServicoGireGanhe) ConfigPublicaParaRede(redeID string) map[string]any {
 	if err != nil || cfg == nil {
 		return nil
 	}
+	totEsp := totalPercentPremiosEspeciais(cfg)
+	ativo := cfg.PremiosEspeciaisAtivo && len(cfg.PremiosEspeciais) > 0 && totEsp > 0
 	return map[string]any{
-		"gire_custo_moedas":               cfg.CustoMoedas,
-		"gire_premio_min_moedas":          cfg.PremioMinMoeda,
-		"gire_premio_max_moedas":          cfg.PremioMaxMoeda,
-		"gire_giros_max_dia":              cfg.GirosMaxDia,
-		"gire_timezone":                   cfg.Timezone,
-		"gire_primeiro_giro_gratis_ativo": cfg.PrimeiroGiroGratisAtivo,
+		"gire_custo_moedas":                     cfg.CustoMoedas,
+		"gire_premio_min_moedas":                cfg.PremioMinMoeda,
+		"gire_premio_max_moedas":                cfg.PremioMaxMoeda,
+		"gire_giros_max_dia":                    cfg.GirosMaxDia,
+		"gire_timezone":                         cfg.Timezone,
+		"gire_primeiro_giro_gratis_ativo":       cfg.PrimeiroGiroGratisAtivo,
+		"gire_premios_especiais_ativo":          ativo,
+		"gire_premio_especial_max_moedas":       premioEspecialMaxMoedas(cfg),
+		"gire_premio_especial_chance_total_pct": totEsp,
 	}
 }
 
@@ -149,21 +240,26 @@ func (s *ServicoGireGanhe) EstadoEU(rede, usuarioID string, r *modelos.Rede, ago
 	}
 	gratis := cfg.PrimeiroGiroGratisAtivo && total == 0
 	mult := s.fatorMultMoedaUsuario(rede, usuarioID)
+	totEsp := totalPercentPremiosEspeciais(cfg)
+	espAtivo := cfg.PremiosEspeciaisAtivo && len(cfg.PremiosEspeciais) > 0 && totEsp > 0
 	return map[string]any{
-		"app_modulo_gire_ganhe":           true,
-		"moeda_virtual_nome":              strings.TrimSpace(r.MoedaVirtualNome),
-		"custo_moedas":                    cfg.CustoMoedas,
-		"premio_min_moedas":               cfg.PremioMinMoeda,
-		"premio_max_moedas":               cfg.PremioMaxMoeda,
-		"giros_max_dia":                   cfg.GirosMaxDia,
-		"giros_feitos_hoje":               hoje,
-		"giros_restantes_hoje":            max(0, cfg.GirosMaxDia-hoje),
-		"primeiro_giro_gratis_disponivel": gratis,
-		"primeiro_giro_gratis_ativo":      cfg.PrimeiroGiroGratisAtivo,
-		"pode_girar":                      hoje < cfg.GirosMaxDia,
-		"multiplicador_moeda_nivel":       mult,
-		"proximo_reset":                   proximoResetLocal(agora, loc).Format(time.RFC3339),
-		"slots":                           qtdSlotsRoleta,
+		"app_modulo_gire_ganhe":            true,
+		"moeda_virtual_nome":               strings.TrimSpace(r.MoedaVirtualNome),
+		"custo_moedas":                     cfg.CustoMoedas,
+		"premio_min_moedas":                cfg.PremioMinMoeda,
+		"premio_max_moedas":                cfg.PremioMaxMoeda,
+		"giros_max_dia":                    cfg.GirosMaxDia,
+		"giros_feitos_hoje":                hoje,
+		"giros_restantes_hoje":             max(0, cfg.GirosMaxDia-hoje),
+		"primeiro_giro_gratis_disponivel":  gratis,
+		"primeiro_giro_gratis_ativo":       cfg.PrimeiroGiroGratisAtivo,
+		"pode_girar":                       hoje < cfg.GirosMaxDia,
+		"multiplicador_moeda_nivel":        mult,
+		"proximo_reset":                    proximoResetLocal(agora, loc).Format(time.RFC3339),
+		"slots":                            qtdSlotsRoleta,
+		"premios_especiais_ativo":          espAtivo,
+		"premio_especial_max_moedas":       premioEspecialMaxMoedas(cfg),
+		"premio_especial_chance_total_pct": totEsp,
 	}, nil
 }
 
@@ -200,10 +296,19 @@ func (s *ServicoGireGanhe) GirarEU(rede, usuarioID string, r *modelos.Rede, agor
 	}
 	gratis := cfg.PrimeiroGiroGratisAtivo && total == 0
 
-	slotIdx := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(qtdSlotsRoleta)
-	premioBase := slotValor(cfg.PremioMinMoeda, cfg.PremioMaxMoeda, slotIdx)
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	esp, valEsp := escolherPremioEspecial(cfg, rng)
+	var slotIdx int
+	var premioBase float64
+	if esp {
+		premioBase = float64(int(math.Round(valEsp)))
+		slotIdx = rng.Intn(qtdSlotsRoleta)
+	} else {
+		slotIdx = rng.Intn(qtdSlotsRoleta)
+		premioBase = slotValor(cfg.PremioMinMoeda, cfg.PremioMaxMoeda, slotIdx)
+	}
 	mult := s.fatorMultMoedaUsuario(rede, usuarioID)
-	premioCredito := math.Round((premioBase*mult)*100) / 100
+	premioCredito := float64(int(math.Round(premioBase * mult)))
 	if premioCredito < 0 {
 		premioCredito = 0
 	}
@@ -240,6 +345,7 @@ func (s *ServicoGireGanhe) GirarEU(rede, usuarioID string, r *modelos.Rede, agor
 		MultiplicadorNivel:  mult,
 		CustoDebitadoMoedas: custoDebitado,
 		GiroGratis:          gratis,
+		PremioEspecial:      esp,
 	}, rede, usuarioID); err != nil {
 		return nil, err
 	}
@@ -270,5 +376,6 @@ func (s *ServicoGireGanhe) GirarEU(rede, usuarioID string, r *modelos.Rede, agor
 		"moeda_virtual_nome":         strings.TrimSpace(r.MoedaVirtualNome),
 		"premio_min_moedas":          cfg.PremioMinMoeda,
 		"premio_max_moedas":          cfg.PremioMaxMoeda,
+		"premio_especial":            esp,
 	}, nil
 }
