@@ -170,6 +170,7 @@ func Nova() (*Aplicacao, error) {
 	repoCarteira := repositorios.NovoCarteiraPostgres(banco)
 	repoIndiqueGanhe := repositorios.NovoIndiqueGanhePostgres(banco)
 	repoNiveisCliente := repositorios.NovoNiveisClientePostgres(banco)
+	repoGireGanhe := repositorios.NovoGireGanhePostgres(banco)
 	svcNiveisCliente := servicos.NovoServicoNiveisCliente(repoNiveisCliente)
 	svcIndiqueGanhe := servicos.NovoServicoIndiqueGanhe(repoRede, repoIndiqueGanhe, repoCarteira, repoUsuarioRede, svcNiveisCliente)
 	repoCheckinDiario := repositorios.NovoCheckinDiarioPostgres(banco)
@@ -190,6 +191,7 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 	svcCheckinDiario := servicos.NovoServicoCheckinDiario(banco, repoCheckinDiario, repoCarteira, svcNiveisCliente, svcUsuarioRede)
+	svcGireGanhe := servicos.NovoServicoGireGanhe(banco, repoGireGanhe, repoCarteira, svcNiveisCliente, svcUsuarioRede)
 	svcPosto := servicos.NovoServicoPosto(repoPosto, repoRede)
 	svcCampanha := servicos.NovoServicoCampanha(repoCampanha, repoRede, repoCombustivelRede)
 	svcVoucherCompra := servicos.NovoServicoVoucherCompra(repoVoucherCompra, svcCampanha, repoMercadoPagoGateway, repoRede, repoCombustivelRede, repoUsuarioRede, cfg, svcIndiqueGanhe)
@@ -200,7 +202,7 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 
-	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, svcIndiqueGanhe, repoCarteira, svcNiveisCliente, svcCheckinDiario, cfg)
+	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, svcIndiqueGanhe, repoCarteira, svcNiveisCliente, svcCheckinDiario, svcGireGanhe, cfg)
 
 	muxPrincipal := http.NewServeMux()
 	mwGlobal := []middlewares.Middleware{

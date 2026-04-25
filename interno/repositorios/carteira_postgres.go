@@ -31,6 +31,8 @@ type CarteiraRepositorio interface {
 	// Idempotente: UNIQUE (rede_id, tipo_referencia, referencia_id, tipo) — repetir o mesmo pedido não duplica débito.
 	// tipoReferencia: ex. "resgate_premio"; referenciaID: UUID do pedido de resgate (ou outro evento deduplicável).
 	DebitarMoeda(redeID, usuarioID string, valorToken float64, tipoReferencia, referenciaID string) error
+	// DebitarMoedaTx igual a DebitarMoeda, porém dentro de transação já aberta.
+	DebitarMoedaTx(ctx context.Context, tx *sql.Tx, redeID, usuarioID string, valorToken float64, tipoReferencia, referenciaID string) error
 }
 
 type carteiraPostgres struct {
@@ -212,4 +214,48 @@ INSERT INTO transacoes_carteira (
 		return nil
 	}
 	return tx.Commit()
+}
+
+func (r *carteiraPostgres) DebitarMoedaTx(ctx context.Context, tx *sql.Tx, redeID, usuarioID string, valorToken float64, tipoReferencia, referenciaID string) error {
+	redeID = strings.TrimSpace(redeID)
+	usuarioID = strings.TrimSpace(usuarioID)
+	tipoReferencia = strings.TrimSpace(tipoReferencia)
+	referenciaID = strings.TrimSpace(referenciaID)
+	if redeID == "" || usuarioID == "" || tipoReferencia == "" || referenciaID == "" {
+		return errors.New("dados invalidos para debito")
+	}
+	if valorToken <= 0 {
+		return errors.New("valor de debito deve ser positivo")
+	}
+	const lockCarteira = `
+SELECT c.id::text FROM carteiras c
+WHERE c.rede_id = $1::uuid AND c.usuario_id = $2::uuid
+FOR UPDATE`
+	var carteiraID string
+	err := tx.QueryRowContext(ctx, lockCarteira, redeID, usuarioID).Scan(&carteiraID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrSaldoInsuficiente
+	}
+	if err != nil {
+		return err
+	}
+	const sumQ = `
+SELECT COALESCE(SUM(t.valor_token * t.direcao), 0)::float8
+FROM transacoes_carteira t
+WHERE t.rede_id = $1::uuid AND t.carteira_id = $2::uuid`
+	var saldo float64
+	if err = tx.QueryRowContext(ctx, sumQ, redeID, carteiraID).Scan(&saldo); err != nil {
+		return err
+	}
+	if saldo < valorToken {
+		return ErrSaldoInsuficiente
+	}
+	const ins = `
+INSERT INTO transacoes_carteira (
+  rede_id, carteira_id, tipo, valor_fiat, valor_token, direcao, tipo_referencia, referencia_id, metadados, ocorrido_em
+) VALUES (
+  $1::uuid, $2::uuid, 'AJUSTE'::tipo_transacao_carteira, 0, $3::numeric, -1, $4, $5::uuid, '{}'::jsonb, NOW()
+) ON CONFLICT (rede_id, tipo_referencia, referencia_id, tipo) DO NOTHING`
+	_, err = tx.ExecContext(ctx, ins, redeID, carteiraID, valorToken, tipoReferencia, referenciaID)
+	return err
 }

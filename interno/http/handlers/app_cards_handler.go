@@ -242,5 +242,10 @@ func (h *Handlers) PublicRedeInfo(w http.ResponseWriter, r *http.Request) {
 			out[k] = v
 		}
 	}
+	if rede.AppModuloGireGanhe && h.gireGanhe != nil {
+		for k, v := range h.gireGanhe.ConfigPublicaParaRede(idRede) {
+			out[k] = v
+		}
+	}
 	utils.ResponderJSON(w, http.StatusOK, out)
 }

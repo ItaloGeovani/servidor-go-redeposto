@@ -7,26 +7,27 @@ import (
 )
 
 type Handlers struct {
-	autenticador       servicos.Autenticador
-	adminService       servicos.ServicoAdministradorGeral
-	gestorService      servicos.ServicoGestorRede
-	redeService        servicos.ServicoRede
-	usuarioRedeService servicos.ServicoUsuarioRede
-	postoService       servicos.ServicoPosto
-	campanhaService    servicos.ServicoCampanha
-	premioService      servicos.ServicoPremio
-	auditoriaRepo      repositorios.AuditoriaRepositorio
-	estatisticasRepo   repositorios.EstatisticasPlataformaRepositorio
-	appMobileRepo      repositorios.AppMobileConfigRepositorio
-	appCardsRepo       repositorios.AppCardsRedeRepositorio
-	mpGatewayRepo      repositorios.MercadoPagoGatewayRepositorio
-	voucherCompraSvc      *servicos.ServicoVoucherCompra
+	autenticador           servicos.Autenticador
+	adminService           servicos.ServicoAdministradorGeral
+	gestorService          servicos.ServicoGestorRede
+	redeService            servicos.ServicoRede
+	usuarioRedeService     servicos.ServicoUsuarioRede
+	postoService           servicos.ServicoPosto
+	campanhaService        servicos.ServicoCampanha
+	premioService          servicos.ServicoPremio
+	auditoriaRepo          repositorios.AuditoriaRepositorio
+	estatisticasRepo       repositorios.EstatisticasPlataformaRepositorio
+	appMobileRepo          repositorios.AppMobileConfigRepositorio
+	appCardsRepo           repositorios.AppCardsRedeRepositorio
+	mpGatewayRepo          repositorios.MercadoPagoGatewayRepositorio
+	voucherCompraSvc       *servicos.ServicoVoucherCompra
 	combustivelRedeService *servicos.ServicoCombustivelRede
-	indiqueGanhe          *servicos.ServicoIndiqueGanhe
-	carteiraRepo          repositorios.CarteiraRepositorio
-	niveisCliente         *servicos.ServicoNiveisCliente
-	checkinDiario         *servicos.ServicoCheckinDiario
-	cfg                   config.Config
+	indiqueGanhe           *servicos.ServicoIndiqueGanhe
+	carteiraRepo           repositorios.CarteiraRepositorio
+	niveisCliente          *servicos.ServicoNiveisCliente
+	checkinDiario          *servicos.ServicoCheckinDiario
+	gireGanhe              *servicos.ServicoGireGanhe
+	cfg                    config.Config
 }
 
 func Novos(
@@ -49,28 +50,30 @@ func Novos(
 	carteiraRepo repositorios.CarteiraRepositorio,
 	niveisCliente *servicos.ServicoNiveisCliente,
 	checkinDiario *servicos.ServicoCheckinDiario,
+	gireGanhe *servicos.ServicoGireGanhe,
 	cfg config.Config,
 ) *Handlers {
 	return &Handlers{
-		autenticador:       autenticador,
-		adminService:       adminService,
-		gestorService:      gestorService,
-		redeService:        redeService,
-		usuarioRedeService: usuarioRedeService,
-		postoService:       postoService,
-		campanhaService:    campanhaService,
-		premioService:      premioService,
-		auditoriaRepo:      auditoriaRepo,
-		estatisticasRepo:   estatisticasRepo,
-		appMobileRepo:      appMobileRepo,
-		appCardsRepo:       appCardsRepo,
-		mpGatewayRepo:      mpGatewayRepo,
+		autenticador:           autenticador,
+		adminService:           adminService,
+		gestorService:          gestorService,
+		redeService:            redeService,
+		usuarioRedeService:     usuarioRedeService,
+		postoService:           postoService,
+		campanhaService:        campanhaService,
+		premioService:          premioService,
+		auditoriaRepo:          auditoriaRepo,
+		estatisticasRepo:       estatisticasRepo,
+		appMobileRepo:          appMobileRepo,
+		appCardsRepo:           appCardsRepo,
+		mpGatewayRepo:          mpGatewayRepo,
 		voucherCompraSvc:       voucherCompraSvc,
 		combustivelRedeService: combustivelRedeService,
-		indiqueGanhe:          indiqueGanhe,
-		carteiraRepo:          carteiraRepo,
-		niveisCliente:         niveisCliente,
-		checkinDiario:         checkinDiario,
+		indiqueGanhe:           indiqueGanhe,
+		carteiraRepo:           carteiraRepo,
+		niveisCliente:          niveisCliente,
+		checkinDiario:          checkinDiario,
+		gireGanhe:              gireGanhe,
 		cfg:                    cfg,
 	}
 }
