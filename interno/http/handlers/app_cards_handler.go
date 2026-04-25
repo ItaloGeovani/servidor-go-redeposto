@@ -247,5 +247,16 @@ func (h *Handlers) PublicRedeInfo(w http.ResponseWriter, r *http.Request) {
 			out[k] = v
 		}
 	}
+	if rede.AppModuloRedesSociais && h.redesSociaisRepo != nil {
+		links, err := h.redesSociaisRepo.ListarPorRedeID(idRede)
+		if err != nil {
+			log.Printf("public rede-info redes sociais: %v", err)
+			out["redes_sociais"] = []any{}
+		} else {
+			out["redes_sociais"] = links
+		}
+	} else {
+		out["redes_sociais"] = []any{}
+	}
 	utils.ResponderJSON(w, http.StatusOK, out)
 }

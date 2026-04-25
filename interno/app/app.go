@@ -171,6 +171,7 @@ func Nova() (*Aplicacao, error) {
 	repoIndiqueGanhe := repositorios.NovoIndiqueGanhePostgres(banco)
 	repoNiveisCliente := repositorios.NovoNiveisClientePostgres(banco)
 	repoGireGanhe := repositorios.NovoGireGanhePostgres(banco)
+	repoLinksSociais := repositorios.NovoRedeLinksSociaisPostgres(banco)
 	svcNiveisCliente := servicos.NovoServicoNiveisCliente(repoNiveisCliente)
 	svcIndiqueGanhe := servicos.NovoServicoIndiqueGanhe(repoRede, repoIndiqueGanhe, repoCarteira, repoUsuarioRede, svcNiveisCliente)
 	repoCheckinDiario := repositorios.NovoCheckinDiarioPostgres(banco)
@@ -202,7 +203,7 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 
-	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, svcIndiqueGanhe, repoCarteira, svcNiveisCliente, svcCheckinDiario, svcGireGanhe, cfg)
+	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, svcIndiqueGanhe, repoCarteira, svcNiveisCliente, svcCheckinDiario, svcGireGanhe, repoLinksSociais, cfg)
 
 	muxPrincipal := http.NewServeMux()
 	mwGlobal := []middlewares.Middleware{
