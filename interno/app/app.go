@@ -167,6 +167,9 @@ func Nova() (*Aplicacao, error) {
 	repoMercadoPagoGateway := repositorios.NovoMercadoPagoGatewayPostgres(banco)
 	repoVoucherCompra := repositorios.NovoVoucherCompraPostgres(banco)
 	repoCombustivelRede := repositorios.NovoCombustivelRedePostgres(banco)
+	repoCarteira := repositorios.NovoCarteiraPostgres(banco)
+	repoIndiqueGanhe := repositorios.NovoIndiqueGanhePostgres(banco)
+	svcIndiqueGanhe := servicos.NovoServicoIndiqueGanhe(repoRede, repoIndiqueGanhe, repoCarteira, repoUsuarioRede)
 	svcAdmin, err := servicos.NovoServicoAdministradorGeral(repoAdmin, autenticador)
 	if err != nil {
 		banco.Close()
@@ -178,14 +181,14 @@ func Nova() (*Aplicacao, error) {
 		banco.Close()
 		return nil, err
 	}
-	svcUsuarioRede, err := servicos.NovoServicoUsuarioRede(repoUsuarioRede, repoRede, autenticador)
+	svcUsuarioRede, err := servicos.NovoServicoUsuarioRede(repoUsuarioRede, repoRede, autenticador, svcIndiqueGanhe)
 	if err != nil {
 		banco.Close()
 		return nil, err
 	}
 	svcPosto := servicos.NovoServicoPosto(repoPosto, repoRede)
 	svcCampanha := servicos.NovoServicoCampanha(repoCampanha, repoRede, repoCombustivelRede)
-	svcVoucherCompra := servicos.NovoServicoVoucherCompra(repoVoucherCompra, svcCampanha, repoMercadoPagoGateway, repoRede, repoCombustivelRede, repoUsuarioRede, cfg)
+	svcVoucherCompra := servicos.NovoServicoVoucherCompra(repoVoucherCompra, svcCampanha, repoMercadoPagoGateway, repoRede, repoCombustivelRede, repoUsuarioRede, cfg, svcIndiqueGanhe)
 	svcCombustivelRede := servicos.NovoServicoCombustivelRede(repoCombustivelRede, repoRede)
 	svcPremio := servicos.NovoServicoPremio(repoPremio, repoRede)
 	if err := bootstrapAdminPadrao(cfg, svcAdmin); err != nil {
@@ -193,7 +196,7 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 
-	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, cfg)
+	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, svcIndiqueGanhe, cfg)
 
 	muxPrincipal := http.NewServeMux()
 	mwGlobal := []middlewares.Middleware{

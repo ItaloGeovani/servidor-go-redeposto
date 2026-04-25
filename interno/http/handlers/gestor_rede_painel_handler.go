@@ -936,3 +936,79 @@ func (h *Handlers) ListarAuditoriaGestorRede(w http.ResponseWriter, r *http.Requ
 		"offset": offset,
 	})
 }
+
+// IndiqueGanheConfigGestor GET/PATCH /v1/gestor-rede/dev/redes/indique-ganhe
+func (h *Handlers) IndiqueGanheConfigGestor(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.getIndiqueGanheConfigGestor(w, r)
+	case http.MethodPatch:
+		h.patchIndiqueGanheConfigGestor(w, r)
+	default:
+		utils.ResponderErro(w, http.StatusMethodNotAllowed, "metodo nao permitido")
+	}
+}
+
+func (h *Handlers) getIndiqueGanheConfigGestor(w http.ResponseWriter, r *http.Request) {
+	if h.indiqueGanhe == nil {
+		utils.ResponderErro(w, http.StatusNotImplemented, "indisponivel")
+		return
+	}
+	idRede, ok := h.idRedeDaSessao(w, r)
+	if !ok {
+		return
+	}
+	cfg, err := h.indiqueGanhe.BuscarConfigIndique(idRede)
+	if err != nil {
+		utils.ResponderErro(w, http.StatusInternalServerError, "falha ao carregar configuracao")
+		return
+	}
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"regra":                   cfg.Regra,
+		"moedas_premio_referente": cfg.MoedasPremioReferente,
+		"moedas_premio_indicado":  cfg.MoedasPremioIndicado,
+	})
+}
+
+type reqIndiqueGanheConfig struct {
+	Regra                 string  `json:"regra"`
+	MoedasPremioReferente float64 `json:"moedas_premio_referente"`
+	MoedasPremioIndicado  float64 `json:"moedas_premio_indicado"`
+}
+
+func (h *Handlers) patchIndiqueGanheConfigGestor(w http.ResponseWriter, r *http.Request) {
+	if h.indiqueGanhe == nil {
+		utils.ResponderErro(w, http.StatusNotImplemented, "indisponivel")
+		return
+	}
+	idRede, ok := h.idRedeDaSessao(w, r)
+	if !ok {
+		return
+	}
+	var req reqIndiqueGanheConfig
+	if err := utils.DecodificarJSON(r, &req); err != nil {
+		utils.ResponderErro(w, http.StatusBadRequest, "payload invalido")
+		return
+	}
+	if err := h.indiqueGanhe.SalvarConfigIndique(idRede, req.Regra, req.MoedasPremioReferente, req.MoedasPremioIndicado); err != nil {
+		if errors.Is(err, servicos.ErrDadosInvalidos) {
+			utils.ResponderErro(w, http.StatusBadRequest, "regra (CADASTRAR ou PRIMEIRA_COMPRA_VOUCHER) e moedas >= 0")
+		} else {
+			utils.ResponderErro(w, http.StatusInternalServerError, "falha ao salvar")
+		}
+		return
+	}
+	cfg, _ := h.indiqueGanhe.BuscarConfigIndique(idRede)
+	if cfg == nil {
+		utils.ResponderJSON(w, http.StatusOK, map[string]any{
+			"mensagem": "configuracao do indique e ganhe salva",
+		})
+		return
+	}
+	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+		"mensagem":                "configuracao do indique e ganhe salva",
+		"regra":                   cfg.Regra,
+		"moedas_premio_referente": cfg.MoedasPremioReferente,
+		"moedas_premio_indicado":  cfg.MoedasPremioIndicado,
+	})
+}

@@ -22,6 +22,7 @@ type Handlers struct {
 	mpGatewayRepo      repositorios.MercadoPagoGatewayRepositorio
 	voucherCompraSvc      *servicos.ServicoVoucherCompra
 	combustivelRedeService *servicos.ServicoCombustivelRede
+	indiqueGanhe          *servicos.ServicoIndiqueGanhe
 	cfg                   config.Config
 }
 
@@ -41,6 +42,7 @@ func Novos(
 	mpGatewayRepo repositorios.MercadoPagoGatewayRepositorio,
 	voucherCompraSvc *servicos.ServicoVoucherCompra,
 	combustivelRedeService *servicos.ServicoCombustivelRede,
+	indiqueGanhe *servicos.ServicoIndiqueGanhe,
 	cfg config.Config,
 ) *Handlers {
 	return &Handlers{
@@ -59,6 +61,7 @@ func Novos(
 		mpGatewayRepo:      mpGatewayRepo,
 		voucherCompraSvc:       voucherCompraSvc,
 		combustivelRedeService: combustivelRedeService,
+		indiqueGanhe:          indiqueGanhe,
 		cfg:                    cfg,
 	}
 }

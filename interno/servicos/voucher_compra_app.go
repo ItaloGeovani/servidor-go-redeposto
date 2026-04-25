@@ -42,6 +42,7 @@ type ServicoVoucherCompra struct {
 	rede       repositorios.RedeRepositorio
 	fcm        repositorios.FCMListador
 	cfg        config.Config
+	indique    *ServicoIndiqueGanhe
 }
 
 func NovoServicoVoucherCompra(
@@ -52,8 +53,9 @@ func NovoServicoVoucherCompra(
 	comb repositorios.CombustivelRedeRepositorio,
 	fcm repositorios.FCMListador,
 	cfg config.Config,
+	ind *ServicoIndiqueGanhe,
 ) *ServicoVoucherCompra {
-	return &ServicoVoucherCompra{repo: repo, campanha: camp, mpGW: mp, rede: rede, combustive: comb, fcm: fcm, cfg: cfg}
+	return &ServicoVoucherCompra{repo: repo, campanha: camp, mpGW: mp, rede: rede, combustive: comb, fcm: fcm, cfg: cfg, indique: ind}
 }
 
 func (s *ServicoVoucherCompra) duracaoPagamentoPix(idRede string) time.Duration {
@@ -437,6 +439,9 @@ func (s *ServicoVoucherCompra) ProcessarPagamentoAprovadoWebhook(idRede string, 
 		if lastErr == nil {
 			log.Printf("voucher webhook: ativado id=%s codigo=%s", idCompra, cod)
 			uid := strings.TrimSpace(vc.UsuarioID)
+			if s.indique != nil && uid != "" {
+				s.indique.AposVoucherAprovado(idRede, uid, idCompra)
+			}
 			go s.notificarPushVoucherAprovado(uid, idCompra, cod, vc.ValorFinal)
 			return
 		}

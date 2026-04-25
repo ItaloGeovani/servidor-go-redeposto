@@ -17,6 +17,8 @@ type reqCadastroClienteApp struct {
 	ConfirmarSenha string `json:"confirmar_senha"`
 	Telefone       string `json:"telefone"`
 	CPF            string `json:"cpf"`
+	// Indique e ganhe: codigo de quem indicou (opcional).
+	CodigoIndicacao string `json:"codigo_indicacao"`
 }
 
 // PublicCadastroClienteApp POST /v1/public/clientes/cadastro — cadastro de cliente no app (sem auth).
@@ -33,13 +35,14 @@ func (h *Handlers) PublicCadastroClienteApp(w http.ResponseWriter, r *http.Reque
 	}
 
 	token, sessao, err := h.usuarioRedeService.CadastrarClienteApp(servicos.CadastroClienteAppInput{
-		IDRede:         req.IDRede,
-		NomeCompleto:   req.NomeCompleto,
-		Email:          req.Email,
-		Senha:          req.Senha,
-		ConfirmarSenha: req.ConfirmarSenha,
-		Telefone:       req.Telefone,
-		CPF:            req.CPF,
+		IDRede:          req.IDRede,
+		NomeCompleto:    req.NomeCompleto,
+		Email:           req.Email,
+		Senha:           req.Senha,
+		ConfirmarSenha:  req.ConfirmarSenha,
+		Telefone:        req.Telefone,
+		CPF:             req.CPF,
+		CodigoIndicacao: req.CodigoIndicacao,
 	})
 	if err != nil {
 		switch {

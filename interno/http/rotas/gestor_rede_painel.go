@@ -24,6 +24,7 @@ func RegistrarGestorRedePainel(muxPrincipal *http.ServeMux, h *handlers.Handlers
 	mux.Handle("/v1/gestor-rede/dev/redes/moeda-virtual", http.HandlerFunc(h.EditarMoedaVirtualMinhaRedeGestor))
 	mux.Handle("/v1/gestor-rede/dev/redes/config-voucher", http.HandlerFunc(h.EditarVoucherConfigMinhaRedeGestor))
 	mux.Handle("/v1/gestor-rede/dev/redes/app-modulos", http.HandlerFunc(h.EditarAppModulosMinhaRedeGestor))
+	mux.Handle("/v1/gestor-rede/dev/redes/indique-ganhe", http.HandlerFunc(h.IndiqueGanheConfigGestor))
 	mux.Handle("/v1/gestor-rede/dev/usuarios-rede/listar", http.HandlerFunc(h.ListarUsuariosRedeGestor))
 	mux.Handle("/v1/gestor-rede/dev/usuarios-rede/criar-equipe", http.HandlerFunc(h.CriarUsuarioEquipeGestorRede))
 	mux.Handle("/v1/gestor-rede/dev/usuarios-rede/editar-equipe", http.HandlerFunc(h.EditarUsuarioEquipeGestorRede))

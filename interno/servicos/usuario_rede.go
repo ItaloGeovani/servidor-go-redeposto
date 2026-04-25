@@ -54,6 +54,8 @@ type CadastroClienteAppInput struct {
 	ConfirmarSenha string
 	Telefone       string
 	CPF            string
+	// CodigoIndicacao opcional: codigo de outro cliente (indique e ganhe).
+	CodigoIndicacao string
 }
 
 // EditarUsuarioEquipeInput atualizacao de gerente ou frentista; senhas vazias mantem a senha atual.
@@ -87,15 +89,24 @@ type usuarioRedePostgresRepo interface {
 	UpsertFCMToken(idUsuario, token, plataforma string) error
 	ListarTokensFCMPorUsuarioID(idUsuario string) ([]string, error)
 	ListarTokensFCMPorRedeClientesAtivos(idRede string) ([]string, error)
+	DefinirCodigoIndicacao(idUsuario, idRede, codigo string) error
+	ObterCodigoIndicacao(idUsuario, idRede string) (string, error)
+	BuscarIdClientePorCodigoIndicacao(idRede, codigo string) (string, error)
 }
 
 type servicoUsuarioRede struct {
-	repoUsuarios usuarioRedePostgresRepo
-	repoRede     repositorios.RedeRepositorio
-	auth         *autenticadorToken
+	repoUsuarios  usuarioRedePostgresRepo
+	repoRede      repositorios.RedeRepositorio
+	auth          *autenticadorToken
+	indiqueGanhe  *ServicoIndiqueGanhe
 }
 
-func NovoServicoUsuarioRede(repoUsuarios usuarioRedePostgresRepo, repoRede repositorios.RedeRepositorio, auth Autenticador) (ServicoUsuarioRede, error) {
+func NovoServicoUsuarioRede(
+	repoUsuarios usuarioRedePostgresRepo,
+	repoRede repositorios.RedeRepositorio,
+	auth Autenticador,
+	indiqueGanhe *ServicoIndiqueGanhe,
+) (ServicoUsuarioRede, error) {
 	authToken, ok := auth.(*autenticadorToken)
 	if !ok {
 		return nil, errors.New("autenticador invalido para servico de usuario da rede")
@@ -104,6 +115,7 @@ func NovoServicoUsuarioRede(repoUsuarios usuarioRedePostgresRepo, repoRede repos
 		repoUsuarios: repoUsuarios,
 		repoRede:     repoRede,
 		auth:         authToken,
+		indiqueGanhe: indiqueGanhe,
 	}, nil
 }
 
@@ -305,6 +317,9 @@ func (s *servicoUsuarioRede) CadastrarClienteApp(in CadastroClienteAppInput) (st
 		Papel:        modelos.PapelCliente,
 	}
 	token := s.auth.CriarSessao(sessao)
+	if s.indiqueGanhe != nil {
+		s.indiqueGanhe.AposNovoCadastro(in.IDRede, u.ID, in.CodigoIndicacao)
+	}
 	return token, sessao, nil
 }
 

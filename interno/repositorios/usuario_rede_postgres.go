@@ -572,6 +572,73 @@ WHERE u.id = $1::uuid AND u.rede_id = $2::uuid`
 	return email, cpf, nil
 }
 
+// DefinirCodigoIndicacao grava o codigo unico (cliente) na rede; falha se duplicar.
+func (r *usuarioRedePostgres) DefinirCodigoIndicacao(idUsuario, idRede, codigo string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c := strings.ToUpper(strings.TrimSpace(codigo))
+	if c == "" {
+		return errors.New("codigo vazio")
+	}
+	const q = `
+UPDATE usuarios SET codigo_indicacao = $3, atualizado_em = NOW()
+WHERE id = $1::uuid AND rede_id = $2::uuid AND papel = 'cliente'::papel_usuario
+`
+	res, err := r.db.ExecContext(ctx, q, strings.TrimSpace(idUsuario), strings.TrimSpace(idRede), c)
+	if err != nil {
+		return mapearErroUsuarioEquipePostgres(err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return errors.New("usuario nao encontrado")
+	}
+	return nil
+}
+
+// ObterCodigoIndicacao codigo de indicacao (pode vazio se ainda nao atribuido).
+func (r *usuarioRedePostgres) ObterCodigoIndicacao(idUsuario, idRede string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var cod sql.NullString
+	const q = `SELECT NULLIF(TRIM(codigo_indicacao), '') FROM usuarios
+WHERE id = $1::uuid AND rede_id = $2::uuid AND papel = 'cliente'::papel_usuario`
+	err := r.db.QueryRowContext(ctx, q, strings.TrimSpace(idUsuario), strings.TrimSpace(idRede)).Scan(&cod)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if !cod.Valid {
+		return "", nil
+	}
+	return strings.TrimSpace(cod.String), nil
+}
+
+// BuscarIdClientePorCodigoIndicacao retorna o id do cliente dono do codigo na rede; vazio se nao existir.
+func (r *usuarioRedePostgres) BuscarIdClientePorCodigoIndicacao(idRede, codigo string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c := strings.ToUpper(strings.TrimSpace(codigo))
+	if c == "" {
+		return "", nil
+	}
+	var id string
+	const q = `
+SELECT u.id::text FROM usuarios u
+WHERE u.rede_id = $1::uuid AND u.papel = 'cliente'::papel_usuario
+  AND upper(trim(codigo_indicacao)) = $2
+LIMIT 1`
+	err := r.db.QueryRowContext(ctx, q, strings.TrimSpace(idRede), c).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
 func (r *usuarioRedePostgres) postoPertenceARedeTx(ctx context.Context, tx *sql.Tx, idPosto, idRede string) (bool, error) {
 	var um int
 	err := tx.QueryRowContext(ctx, `
