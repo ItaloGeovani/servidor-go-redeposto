@@ -25,6 +25,8 @@ type ServicoUsuarioRede interface {
 	ExcluirContaClienteApp(idUsuario, idRede string) error
 	// EmailECPFPorUsuarioRede e-mail e CPF cadastrados (app / pagamento).
 	EmailECPFPorUsuarioRede(idUsuario, idRede string) (email string, cpf string, err error)
+	// ObterNivelCliente codigo do nivel (ex. bronze) para multiplicador de moeda no app.
+	ObterNivelCliente(idUsuario, idRede string) (string, error)
 	// RegistrarTokenFCM grava o token do Firebase Cloud Messaging (push) para o utilizador.
 	RegistrarTokenFCM(idUsuario, token, plataforma string) error
 	// ListarTokensFCM tokens guardados (para teste de push / envio).
@@ -86,6 +88,7 @@ type usuarioRedePostgresRepo interface {
 	BuscarPorEmailParaLoginPainel(email string) (*repositorios.UsuarioPainelLogin, error)
 	PostoPertenceARede(idPosto, idRede string) (bool, error)
 	EmailECPFPorUsuarioRede(idUsuario, idRede string) (email string, cpf string, err error)
+	ObterNivelCliente(idUsuario, idRede string) (string, error)
 	UpsertFCMToken(idUsuario, token, plataforma string) error
 	ListarTokensFCMPorUsuarioID(idUsuario string) ([]string, error)
 	ListarTokensFCMPorRedeClientesAtivos(idRede string) ([]string, error)
@@ -334,6 +337,10 @@ func (s *servicoUsuarioRede) ExcluirContaClienteApp(idUsuario, idRede string) er
 
 func (s *servicoUsuarioRede) EmailECPFPorUsuarioRede(idUsuario, idRede string) (email string, cpf string, err error) {
 	return s.repoUsuarios.EmailECPFPorUsuarioRede(idUsuario, idRede)
+}
+
+func (s *servicoUsuarioRede) ObterNivelCliente(idUsuario, idRede string) (string, error) {
+	return s.repoUsuarios.ObterNivelCliente(idUsuario, idRede)
 }
 
 func (s *servicoUsuarioRede) RegistrarTokenFCM(idUsuario, token, plataforma string) error {

@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"gaspass-servidor/interno/http/middlewares"
 	"gaspass-servidor/interno/modelos"
@@ -32,6 +33,18 @@ func (h *Handlers) PerfilLogado(w http.ResponseWriter, r *http.Request) {
 	} else {
 		out["email"] = ""
 		out["cpf"] = ""
+	}
+	if usuario.Papel == modelos.PapelCliente && h.niveisCliente != nil {
+		if nc, err := h.niveisCliente.Buscar(usuario.IDRede); err == nil && nc != nil && nc.Ativo {
+			out["app_niveis_moeda_ativo"] = true
+			cod, err := h.usuarioRedeService.ObterNivelCliente(usuario.IDUsuario, usuario.IDRede)
+			if err != nil || strings.TrimSpace(cod) == "" {
+				cod = "bronze"
+			}
+			cod = strings.ToLower(strings.TrimSpace(cod))
+			out["nivel_cliente_codigo"] = cod
+			out["mult_moeda_nivel_atual"] = h.niveisCliente.FatorMultMoeda(usuario.IDRede, cod)
+		}
 	}
 	utils.ResponderJSON(w, http.StatusOK, out)
 }
