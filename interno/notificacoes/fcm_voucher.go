@@ -92,7 +92,11 @@ func EnviarVoucherAprovado(ctx context.Context, cred string, tokens []string, id
 
 // EnviarNovaCampanhaNoApp push para clientes da rede quando o gestor cria campanha ativa no app.
 func EnviarNovaCampanhaNoApp(ctx context.Context, cred string, tokens []string, idCampanha, tituloExibicao, idRede string) {
-	if cred == "" || len(tokens) == 0 {
+	if cred == "" {
+		log.Printf("fcm campanha: EnviarNovaCampanhaNoApp cred vazio")
+		return
+	}
+	if len(tokens) == 0 {
 		return
 	}
 	c, err := fcmMensageria(ctx, cred)
@@ -109,6 +113,7 @@ func EnviarNovaCampanhaNoApp(ctx context.Context, cred string, tokens []string, 
 	}
 	cid := strings.TrimSpace(idCampanha)
 	rid := strings.TrimSpace(idRede)
+	sucesso := 0
 	for i := 0; i < len(tokens); i += 500 {
 		j := i + 500
 		if j > len(tokens) {
@@ -133,10 +138,12 @@ func EnviarNovaCampanhaNoApp(ctx context.Context, cred string, tokens []string, 
 			log.Printf("fcm campanha: SendEachForMulticast: %v", err)
 			return
 		}
+		sucesso += br.SuccessCount
 		if br.FailureCount > 0 {
 			log.Printf("fcm campanha: lote: falhas=%d de %d", br.FailureCount, len(batch))
 		}
 	}
+	log.Printf("fcm campanha: fcm concluido id_campanha=%s sucesso=%d de %d token(s) id_rede=%s", cid, sucesso, len(tokens), rid)
 }
 
 // EnviarTeste notificacao simples (endpoint /v1/eu/push/fcm/teste) para validar FCM no dispositivo.
