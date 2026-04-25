@@ -172,6 +172,7 @@ func Nova() (*Aplicacao, error) {
 	repoNiveisCliente := repositorios.NovoNiveisClientePostgres(banco)
 	svcNiveisCliente := servicos.NovoServicoNiveisCliente(repoNiveisCliente)
 	svcIndiqueGanhe := servicos.NovoServicoIndiqueGanhe(repoRede, repoIndiqueGanhe, repoCarteira, repoUsuarioRede, svcNiveisCliente)
+	repoCheckinDiario := repositorios.NovoCheckinDiarioPostgres(banco)
 	svcAdmin, err := servicos.NovoServicoAdministradorGeral(repoAdmin, autenticador)
 	if err != nil {
 		banco.Close()
@@ -188,6 +189,7 @@ func Nova() (*Aplicacao, error) {
 		banco.Close()
 		return nil, err
 	}
+	svcCheckinDiario := servicos.NovoServicoCheckinDiario(banco, repoCheckinDiario, repoCarteira, svcNiveisCliente, svcUsuarioRede)
 	svcPosto := servicos.NovoServicoPosto(repoPosto, repoRede)
 	svcCampanha := servicos.NovoServicoCampanha(repoCampanha, repoRede, repoCombustivelRede)
 	svcVoucherCompra := servicos.NovoServicoVoucherCompra(repoVoucherCompra, svcCampanha, repoMercadoPagoGateway, repoRede, repoCombustivelRede, repoUsuarioRede, cfg, svcIndiqueGanhe)
@@ -198,7 +200,7 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 
-	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, svcIndiqueGanhe, repoCarteira, svcNiveisCliente, cfg)
+	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, svcIndiqueGanhe, repoCarteira, svcNiveisCliente, svcCheckinDiario, cfg)
 
 	muxPrincipal := http.NewServeMux()
 	mwGlobal := []middlewares.Middleware{

@@ -23,6 +23,8 @@ type CarteiraRepositorio interface {
 		valorToken float64,
 		tipoRef, idRef string,
 	) error
+	// CreditarBonusTx igual a CreditarBonus mas na mesma transacao (ex.: check-in + registo).
+	CreditarBonusTx(ctx context.Context, tx *sql.Tx, redeID, carteiraID string, valorToken float64, tipoRef, idRef string) error
 	// ObterSaldoToken soma valor_token * direcao das transações da carteira do utilizador na rede.
 	ObterSaldoToken(redeID, usuarioID string) (float64, error)
 	// DebitarMoeda regista saída (direcao -1, tipo AJUSTE). Transação atómica: bloqueia carteira, verifica saldo, insere.
@@ -102,6 +104,28 @@ INSERT INTO transacoes_carteira (
 ) ON CONFLICT (rede_id, tipo_referencia, referencia_id, tipo) DO NOTHING
 `
 	_, err := r.db.ExecContext(ctx, ins, redeID, carteiraID, valorToken, tipoRef, idRef)
+	return err
+}
+
+func (r *carteiraPostgres) CreditarBonusTx(ctx context.Context, tx *sql.Tx, redeID, carteiraID string, valorToken float64, tipoRef, idRef string) error {
+	if valorToken <= 0 {
+		return nil
+	}
+	redeID = strings.TrimSpace(redeID)
+	carteiraID = strings.TrimSpace(carteiraID)
+	tipoRef = strings.TrimSpace(tipoRef)
+	idRef = strings.TrimSpace(idRef)
+	if redeID == "" || carteiraID == "" || tipoRef == "" || idRef == "" {
+		return errors.New("dados invalidos para bonus")
+	}
+	const ins = `
+INSERT INTO transacoes_carteira (
+  rede_id, carteira_id, tipo, valor_fiat, valor_token, direcao, tipo_referencia, referencia_id, metadados, ocorrido_em
+) VALUES (
+  $1::uuid, $2::uuid, 'BONUS'::tipo_transacao_carteira, 0, $3::numeric, 1, $4, $5::uuid, '{}'::jsonb, NOW()
+) ON CONFLICT (rede_id, tipo_referencia, referencia_id, tipo) DO NOTHING
+`
+	_, err := tx.ExecContext(ctx, ins, redeID, carteiraID, valorToken, tipoRef, idRef)
 	return err
 }
 

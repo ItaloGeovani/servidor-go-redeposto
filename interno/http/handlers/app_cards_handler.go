@@ -237,5 +237,10 @@ func (h *Handlers) PublicRedeInfo(w http.ResponseWriter, r *http.Request) {
 		out["app_niveis_mult_desconto_ativo"] = false
 		out["niveis_cliente"] = nil
 	}
+	if rede.AppModuloCheckinDiario && h.checkinDiario != nil {
+		for k, v := range h.checkinDiario.ConfigPublicaParaRede(idRede) {
+			out[k] = v
+		}
+	}
 	utils.ResponderJSON(w, http.StatusOK, out)
 }

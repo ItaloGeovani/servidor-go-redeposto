@@ -25,6 +25,7 @@ type Handlers struct {
 	indiqueGanhe          *servicos.ServicoIndiqueGanhe
 	carteiraRepo          repositorios.CarteiraRepositorio
 	niveisCliente         *servicos.ServicoNiveisCliente
+	checkinDiario         *servicos.ServicoCheckinDiario
 	cfg                   config.Config
 }
 
@@ -47,6 +48,7 @@ func Novos(
 	indiqueGanhe *servicos.ServicoIndiqueGanhe,
 	carteiraRepo repositorios.CarteiraRepositorio,
 	niveisCliente *servicos.ServicoNiveisCliente,
+	checkinDiario *servicos.ServicoCheckinDiario,
 	cfg config.Config,
 ) *Handlers {
 	return &Handlers{
@@ -68,6 +70,7 @@ func Novos(
 		indiqueGanhe:          indiqueGanhe,
 		carteiraRepo:          carteiraRepo,
 		niveisCliente:         niveisCliente,
+		checkinDiario:         checkinDiario,
 		cfg:                    cfg,
 	}
 }

@@ -12,6 +12,7 @@ func RegistrarProtegidas(muxPrincipal *http.ServeMux, h *handlers.Handlers, aut 
 	muxProtegida := http.NewServeMux()
 	muxProtegida.Handle("/v1/eu/perfil", http.HandlerFunc(h.PerfilLogado))
 	muxProtegida.Handle("/v1/eu/indique-ganhe", http.HandlerFunc(h.GetEuIndiqueGanhe))
+	muxProtegida.Handle("/v1/eu/checkin-diario", http.HandlerFunc(h.CheckinDiarioEU))
 	muxProtegida.Handle("/v1/eu/carteira/saldo", http.HandlerFunc(h.GetEuCarteiraSaldo))
 	muxProtegida.Handle("/v1/eu/conta", http.HandlerFunc(h.ExcluirContaClienteApp))
 	muxProtegida.Handle("/v1/eu/pagamentos/mercadopago/pix", http.HandlerFunc(h.PostClienteMercadoPagoPix))
