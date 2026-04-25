@@ -207,7 +207,7 @@ func (h *Handlers) PublicRedeInfo(w http.ResponseWriter, r *http.Request) {
 	// CDNs e proxies costumam cachear GET; flags mudam no painel e o app precisa do valor atual.
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
-	utils.ResponderJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"id_rede":                   idRede,
 		"nome_fantasia":             strings.TrimSpace(rede.NomeFantasia),
 		"moeda_virtual_nome":        strings.TrimSpace(rede.MoedaVirtualNome),
@@ -216,5 +216,26 @@ func (h *Handlers) PublicRedeInfo(w http.ResponseWriter, r *http.Request) {
 		"app_modulo_checkin_diario": rede.AppModuloCheckinDiario,
 		"app_modulo_gire_ganhe":     rede.AppModuloGireGanhe,
 		"app_modulo_redes_sociais":  rede.AppModuloRedesSociais,
-	})
+	}
+	if h.niveisCliente != nil {
+		nc, err := h.niveisCliente.Buscar(idRede)
+		if err == nil && nc != nil {
+			out["app_niveis_moeda_ativo"] = nc.Ativo
+			out["app_niveis_mult_desconto_ativo"] = nc.MultDescontoAtivo
+			if nc.Ativo {
+				out["niveis_cliente"] = nc.Niveis
+			} else {
+				out["niveis_cliente"] = nil
+			}
+		} else {
+			out["app_niveis_moeda_ativo"] = false
+			out["app_niveis_mult_desconto_ativo"] = false
+			out["niveis_cliente"] = nil
+		}
+	} else {
+		out["app_niveis_moeda_ativo"] = false
+		out["app_niveis_mult_desconto_ativo"] = false
+		out["niveis_cliente"] = nil
+	}
+	utils.ResponderJSON(w, http.StatusOK, out)
 }

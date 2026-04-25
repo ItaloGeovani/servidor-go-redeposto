@@ -595,6 +595,26 @@ WHERE id = $1::uuid AND rede_id = $2::uuid AND papel = 'cliente'::papel_usuario
 	return nil
 }
 
+// ObterNivelCliente codigo do nivel (ex. bronze) para multiplicador de moeda; padrao bronze.
+func (r *usuarioRedePostgres) ObterNivelCliente(idUsuario, idRede string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var n sql.NullString
+	const q = `SELECT NULLIF(TRIM(LOWER(nivel_cliente)), '') FROM usuarios
+WHERE id = $1::uuid AND rede_id = $2::uuid AND papel = 'cliente'::papel_usuario`
+	err := r.db.QueryRowContext(ctx, q, strings.TrimSpace(idUsuario), strings.TrimSpace(idRede)).Scan(&n)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "bronze", nil
+	}
+	if err != nil {
+		return "bronze", err
+	}
+	if !n.Valid || n.String == "" {
+		return "bronze", nil
+	}
+	return n.String, nil
+}
+
 // ObterCodigoIndicacao codigo de indicacao (pode vazio se ainda nao atribuido).
 func (r *usuarioRedePostgres) ObterCodigoIndicacao(idUsuario, idRede string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

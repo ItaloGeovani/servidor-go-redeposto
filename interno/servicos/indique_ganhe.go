@@ -15,14 +15,16 @@ type IndiqueGanheUsuario interface {
 	DefinirCodigoIndicacao(idUsuario, idRede, codigo string) error
 	ObterCodigoIndicacao(idUsuario, idRede string) (string, error)
 	BuscarIdClientePorCodigoIndicacao(idRede, codigo string) (string, error)
+	ObterNivelCliente(idUsuario, idRede string) (string, error)
 }
 
 // ServicoIndiqueGanhe regras de indicacao, bonus na carteira (moeda virtual).
 type ServicoIndiqueGanhe struct {
-	rede repositorios.RedeRepositorio
-	ind  repositorios.IndiqueGanheRepositorio
-	cart repositorios.CarteiraRepositorio
-	usu  IndiqueGanheUsuario
+	rede   repositorios.RedeRepositorio
+	ind    repositorios.IndiqueGanheRepositorio
+	cart   repositorios.CarteiraRepositorio
+	usu    IndiqueGanheUsuario
+	niveis *ServicoNiveisCliente
 }
 
 func NovoServicoIndiqueGanhe(
@@ -30,8 +32,9 @@ func NovoServicoIndiqueGanhe(
 	ind repositorios.IndiqueGanheRepositorio,
 	cart repositorios.CarteiraRepositorio,
 	usu IndiqueGanheUsuario,
+	niveis *ServicoNiveisCliente,
 ) *ServicoIndiqueGanhe {
-	return &ServicoIndiqueGanhe{rede: rede, ind: ind, cart: cart, usu: usu}
+	return &ServicoIndiqueGanhe{rede: rede, ind: ind, cart: cart, usu: usu, niveis: niveis}
 }
 
 const charsetCodigo = "BCDFGHJKLMNPQRSTVWXYZ23456789"
@@ -112,9 +115,27 @@ func (s *ServicoIndiqueGanhe) AposNovoCadastro(rede, novoID, codIndicadorInforma
 func (s *ServicoIndiqueGanhe) premiarCadastro(
 	rede string, r *modelos.Rede, indicID, refID, novoID string, cfg *repositorios.RedeIndiqueGanheConfig,
 ) {
-	s.cred(rede, r, refID, cfg.MoedasPremioReferente, "ig_ref_cad", indicID)
-	s.cred(rede, r, novoID, cfg.MoedasPremioIndicado, "ig_ind_cad", indicID)
+	mRef := cfg.MoedasPremioReferente * s.fatorMultMoedaUsuario(rede, refID)
+	mInd := cfg.MoedasPremioIndicado * s.fatorMultMoedaUsuario(rede, novoID)
+	s.cred(rede, r, refID, mRef, "ig_ref_cad", indicID)
+	s.cred(rede, r, novoID, mInd, "ig_ind_cad", indicID)
 	_ = s.ind.MarcarPremioCadastro(rede, indicID, true, true)
+}
+
+// fatorMultMoedaUsuario multiplicador de moeda por nivel (1 se modulos de nivel desligados no painel).
+func (s *ServicoIndiqueGanhe) fatorMultMoedaUsuario(rede, usuarioID string) float64 {
+	if s == nil || s.niveis == nil {
+		return 1
+	}
+	cod, err := s.usu.ObterNivelCliente(usuarioID, rede)
+	if err != nil {
+		return s.niveis.FatorMultMoeda(rede, "bronze")
+	}
+	cod = strings.ToLower(strings.TrimSpace(cod))
+	if cod == "" {
+		cod = "bronze"
+	}
+	return s.niveis.FatorMultMoeda(rede, cod)
 }
 
 func (s *ServicoIndiqueGanhe) cred(rede string, r *modelos.Rede, usuarioID string, moedas float64, tipoRef, indicacaoID string) {
@@ -154,8 +175,10 @@ func (s *ServicoIndiqueGanhe) AposVoucherAprovado(rede, usuarioID, _compraID str
 	if err != nil || n < 1 {
 		return
 	}
-	s.cred(rede, red, ind.ReferenteUsuarioID, cfg.MoedasPremioReferente, "ig_ref_compra", ind.ID)
-	s.cred(rede, red, ind.IndicadoUsuarioID, cfg.MoedasPremioIndicado, "ig_ind_compra", ind.ID)
+	mRef := cfg.MoedasPremioReferente * s.fatorMultMoedaUsuario(rede, ind.ReferenteUsuarioID)
+	mInd := cfg.MoedasPremioIndicado * s.fatorMultMoedaUsuario(rede, ind.IndicadoUsuarioID)
+	s.cred(rede, red, ind.ReferenteUsuarioID, mRef, "ig_ref_compra", ind.ID)
+	s.cred(rede, red, ind.IndicadoUsuarioID, mInd, "ig_ind_compra", ind.ID)
 	_ = s.ind.MarcarPremioCompra(rede, ind.ID, true, true)
 }
 
@@ -259,6 +282,31 @@ func (s *ServicoIndiqueGanhe) TelaIndiqueGanheEU(rede, usuarioID string, r *mode
 		m["moeda_virtual_nome"] = strings.TrimSpace(r.MoedaVirtualNome)
 		m["moeda_virtual_cotacao"] = r.MoedaVirtualCotacao
 		m["app_modulo_indique_ganhe"] = r.AppModuloIndiqueGanhe
+	}
+	// Niveis: valores de config sao a base; com niveis ativos, o app pode mostrar o efeito com mult_moeda_por_nivel.
+	nivelCod, _ := s.usu.ObterNivelCliente(usuarioID, rede)
+	nivelCod = strings.TrimSpace(nivelCod)
+	if nivelCod == "" {
+		nivelCod = "bronze"
+	}
+	if s.niveis != nil {
+		nc, _ := s.niveis.Buscar(rede)
+		ativoN := false
+		if nc != nil {
+			ativoN = nc.Ativo
+		}
+		m["app_niveis_moeda_ativo"] = ativoN
+		mult := s.niveis.FatorMultMoeda(rede, nivelCod)
+		m["nivel_cliente_codigo"] = nivelCod
+		m["mult_moeda_por_nivel"] = mult
+		m["moedas_premio_referente_efeito"] = cfg.MoedasPremioReferente * mult
+		m["moedas_premio_indicado_efeito"] = cfg.MoedasPremioIndicado * mult
+	} else {
+		m["app_niveis_moeda_ativo"] = false
+		m["nivel_cliente_codigo"] = nivelCod
+		m["mult_moeda_por_nivel"] = 1.0
+		m["moedas_premio_referente_efeito"] = cfg.MoedasPremioReferente
+		m["moedas_premio_indicado_efeito"] = cfg.MoedasPremioIndicado
 	}
 	return m, nil
 }

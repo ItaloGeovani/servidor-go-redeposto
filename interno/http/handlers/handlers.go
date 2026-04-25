@@ -24,6 +24,7 @@ type Handlers struct {
 	combustivelRedeService *servicos.ServicoCombustivelRede
 	indiqueGanhe          *servicos.ServicoIndiqueGanhe
 	carteiraRepo          repositorios.CarteiraRepositorio
+	niveisCliente         *servicos.ServicoNiveisCliente
 	cfg                   config.Config
 }
 
@@ -45,6 +46,7 @@ func Novos(
 	combustivelRedeService *servicos.ServicoCombustivelRede,
 	indiqueGanhe *servicos.ServicoIndiqueGanhe,
 	carteiraRepo repositorios.CarteiraRepositorio,
+	niveisCliente *servicos.ServicoNiveisCliente,
 	cfg config.Config,
 ) *Handlers {
 	return &Handlers{
@@ -65,6 +67,7 @@ func Novos(
 		combustivelRedeService: combustivelRedeService,
 		indiqueGanhe:          indiqueGanhe,
 		carteiraRepo:          carteiraRepo,
+		niveisCliente:         niveisCliente,
 		cfg:                    cfg,
 	}
 }
