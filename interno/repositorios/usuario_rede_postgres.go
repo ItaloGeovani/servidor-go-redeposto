@@ -328,6 +328,41 @@ LIMIT 32`, idUsuario)
 	return out, rows.Err()
 }
 
+// ListarTokensFCMPorRedeClientesAtivos tokens distintos de clientes ativos da rede (para notificacoes em massa).
+func (r *usuarioRedePostgres) ListarTokensFCMPorRedeClientesAtivos(idRede string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	idRede = strings.TrimSpace(idRede)
+	if idRede == "" {
+		return nil, errors.New("id rede invalido")
+	}
+	rows, err := r.db.QueryContext(ctx, `
+SELECT DISTINCT t.token
+FROM usuario_fcm_tokens t
+INNER JOIN usuarios u ON u.id = t.usuario_id
+WHERE u.rede_id = $1::uuid
+  AND u.papel = 'cliente'::papel_usuario
+  AND u.ativo = true
+  AND t.token IS NOT NULL
+  AND length(trim(t.token)) >= 20`, idRede)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var tok string
+		if err := rows.Scan(&tok); err != nil {
+			return nil, err
+		}
+		tok = strings.TrimSpace(tok)
+		if tok != "" {
+			out = append(out, tok)
+		}
+	}
+	return out, rows.Err()
+}
+
 func mapearErroUsuarioEquipePostgres(err error) error {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {

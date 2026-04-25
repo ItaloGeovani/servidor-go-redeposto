@@ -161,7 +161,7 @@ func (h *Handlers) CriarCampanhaRedeDev(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	}
-
+	h.notificarClientesPushNovaCampanha(c)
 	utils.ResponderJSON(w, http.StatusCreated, map[string]any{
 		"mensagem": "campanha criada com sucesso",
 		"campanha": c,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	firebase "firebase.google.com/go/v4"
@@ -85,6 +86,55 @@ func EnviarVoucherAprovado(ctx context.Context, cred string, tokens []string, id
 		}
 		if br.FailureCount > 0 {
 			log.Printf("fcm: lote: falhas=%d de %d (tokens invalidos ou desinstalacoes antigas)", br.FailureCount, len(batch))
+		}
+	}
+}
+
+// EnviarNovaCampanhaNoApp push para clientes da rede quando o gestor cria campanha ativa no app.
+func EnviarNovaCampanhaNoApp(ctx context.Context, cred string, tokens []string, idCampanha, tituloExibicao, idRede string) {
+	if cred == "" || len(tokens) == 0 {
+		return
+	}
+	c, err := fcmMensageria(ctx, cred)
+	if err != nil {
+		log.Printf("fcm campanha: abrir credenciais: %v", err)
+		return
+	}
+	if c == nil {
+		return
+	}
+	tit := strings.TrimSpace(tituloExibicao)
+	if tit == "" {
+		tit = "Nova promocao"
+	}
+	cid := strings.TrimSpace(idCampanha)
+	rid := strings.TrimSpace(idRede)
+	for i := 0; i < len(tokens); i += 500 {
+		j := i + 500
+		if j > len(tokens) {
+			j = len(tokens)
+		}
+		batch := tokens[i:j]
+		req := &messaging.MulticastMessage{
+			Tokens: batch,
+			Notification: &messaging.Notification{
+				Title: "Nova promocao",
+				Body:  tit,
+			},
+			Data: map[string]string{
+				"tipo":         "nova_campanha_app",
+				"id_campanha":  cid,
+				"id_rede":      rid,
+				"abrir_tela":   "promocoes",
+			},
+		}
+		br, err := c.SendEachForMulticast(ctx, req)
+		if err != nil {
+			log.Printf("fcm campanha: SendEachForMulticast: %v", err)
+			return
+		}
+		if br.FailureCount > 0 {
+			log.Printf("fcm campanha: lote: falhas=%d de %d", br.FailureCount, len(batch))
 		}
 	}
 }

@@ -29,6 +29,8 @@ type ServicoUsuarioRede interface {
 	RegistrarTokenFCM(idUsuario, token, plataforma string) error
 	// ListarTokensFCM tokens guardados (para teste de push / envio).
 	ListarTokensFCM(idUsuario string) ([]string, error)
+	// ListarTokensFCMClientesRede tokens FCM de todos os clientes ativos da rede (push em massa).
+	ListarTokensFCMClientesRede(idRede string) ([]string, error)
 }
 
 // CriarUsuarioEquipeInput cadastro de gerente de posto ou frentista pelo admin global.
@@ -84,6 +86,7 @@ type usuarioRedePostgresRepo interface {
 	EmailECPFPorUsuarioRede(idUsuario, idRede string) (email string, cpf string, err error)
 	UpsertFCMToken(idUsuario, token, plataforma string) error
 	ListarTokensFCMPorUsuarioID(idUsuario string) ([]string, error)
+	ListarTokensFCMPorRedeClientesAtivos(idRede string) ([]string, error)
 }
 
 type servicoUsuarioRede struct {
@@ -331,4 +334,8 @@ func (s *servicoUsuarioRede) RegistrarTokenFCM(idUsuario, token, plataforma stri
 
 func (s *servicoUsuarioRede) ListarTokensFCM(idUsuario string) ([]string, error) {
 	return s.repoUsuarios.ListarTokensFCMPorUsuarioID(strings.TrimSpace(idUsuario))
+}
+
+func (s *servicoUsuarioRede) ListarTokensFCMClientesRede(idRede string) ([]string, error) {
+	return s.repoUsuarios.ListarTokensFCMPorRedeClientesAtivos(strings.TrimSpace(idRede))
 }

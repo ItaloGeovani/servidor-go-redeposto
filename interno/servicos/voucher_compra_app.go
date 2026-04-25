@@ -82,11 +82,12 @@ func (s *ServicoVoucherCompra) expiraResgateAposPagamentoAprovado(idRede string,
 
 // ResultadoCalcularVoucher resposta de /v1/eu/vouchers/calcular.
 type ResultadoCalcularVoucher struct {
-	ValorSolicitado  float64 `json:"valor_solicitado"`
-	DescontoAplicado float64 `json:"desconto_aplicado"`
-	ValorFinal       float64 `json:"valor_final"`
-	CampanhaID       *string `json:"id_campanha,omitempty"`
-	CampanhaTitulo   string  `json:"campanha_titulo,omitempty"`
+	ValorSolicitado  float64  `json:"valor_solicitado"`
+	DescontoAplicado float64  `json:"desconto_aplicado"`
+	ValorFinal       float64  `json:"valor_final"`
+	Litros           *float64 `json:"litros,omitempty"`
+	CampanhaID       *string  `json:"id_campanha,omitempty"`
+	CampanhaTitulo   string   `json:"campanha_titulo,omitempty"`
 }
 
 // Calcular aplica regras de campanha (sem persistir).
@@ -174,6 +175,10 @@ func (s *ServicoVoucherCompra) Calcular(
 	out.ValorFinal = round2(math.Max(0.01, valorCompra-out.DescontoAplicado))
 	out.CampanhaID = idCampanha
 	out.CampanhaTitulo = tituloCampanha(c)
+	if c.BaseDesconto == modelos.BaseDescontoLitro && litrosVal != nil {
+		lr := *litrosVal
+		out.Litros = &lr
+	}
 	return out, nil
 }
 
@@ -329,6 +334,10 @@ func (s *ServicoVoucherCompra) PagarComPixInicia(ctx context.Context, idRede, id
 	if idCampanha != nil && strings.TrimSpace(*idCampanha) != "" {
 		s := strings.TrimSpace(*idCampanha)
 		reg.CampanhaID = &s
+	}
+	if calc.Litros != nil {
+		v := *calc.Litros
+		reg.Litros = &v
 	}
 	if err := s.repo.CriarPendenteComPix(reg); err != nil {
 		return nil, res, err

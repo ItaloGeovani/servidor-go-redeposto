@@ -18,6 +18,7 @@ type VoucherCompraRegistro struct {
 	ValorSolicitado     float64    `json:"valor_solicitado"`
 	DescontoAplicado    float64    `json:"desconto_aplicado"`
 	ValorFinal          float64    `json:"valor_final"`
+	Litros              *float64   `json:"litros,omitempty"`
 	Status              string     `json:"status"`
 	MpPaymentID         *int64     `json:"mp_payment_id,omitempty"`
 	ReferenciaPagamento *string   `json:"referencia_pagamento,omitempty"`

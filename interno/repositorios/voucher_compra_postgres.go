@@ -30,14 +30,14 @@ func (r *voucherCompraPostgres) CriarPendenteComPix(x *VoucherCompraRegistro) er
 	}
 	return r.db.QueryRowContext(ctx, `
 INSERT INTO voucher_compras (
-  id, rede_id, usuario_id, campanha_id, valor_solicitado, desconto_aplicado, valor_final, status,
+  id, rede_id, usuario_id, campanha_id, valor_solicitado, desconto_aplicado, valor_final, litros, status,
   mp_payment_id, referencia_pagamento, expira_pagamento_em, criado_em, atualizado_em
 ) VALUES (
-  $1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8::status_voucher_compra,
-  $9, $10, $11, NOW(), NOW()
+  $1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9::status_voucher_compra,
+  $10, $11, $12, NOW(), NOW()
 )
 RETURNING id::text, criado_em, atualizado_em
-`, x.ID, x.RedeID, x.UsuarioID, camp, x.ValorSolicitado, x.DescontoAplicado, x.ValorFinal, x.Status,
+`, x.ID, x.RedeID, x.UsuarioID, camp, x.ValorSolicitado, x.DescontoAplicado, x.ValorFinal, nullFloat64Ptr(x.Litros), x.Status,
 		mpID, nullStringPtr(ref), x.ExpiraPagamento,
 	).Scan(&x.ID, &x.CriadoEm, &x.AtualizadoEm)
 }
@@ -47,6 +47,13 @@ func nullStringPtr(s string) any {
 		return nil
 	}
 	return s
+}
+
+func nullFloat64Ptr(f *float64) any {
+	if f == nil {
+		return nil
+	}
+	return *f
 }
 
 func nullUUIDString(p *string) any {
@@ -63,13 +70,18 @@ type scannerVcr interface {
 func scanVcr(s scannerVcr, x *VoucherCompraRegistro) error {
 	var camp, ref, cod sql.NullString
 	var mpID sql.NullInt64
+	var litros sql.NullFloat64
 	var exPag, exRes sql.NullTime
 	err := s.Scan(
-		&x.ID, &x.RedeID, &x.UsuarioID, &camp, &x.ValorSolicitado, &x.DescontoAplicado, &x.ValorFinal, &x.Status,
+		&x.ID, &x.RedeID, &x.UsuarioID, &camp, &x.ValorSolicitado, &x.DescontoAplicado, &x.ValorFinal, &litros, &x.Status,
 		&mpID, &ref, &cod, &exPag, &exRes, &x.CriadoEm, &x.AtualizadoEm,
 	)
 	if err != nil {
 		return err
+	}
+	if litros.Valid {
+		v := litros.Float64
+		x.Litros = &v
 	}
 	if camp.Valid && strings.TrimSpace(camp.String) != "" {
 		v := camp.String
@@ -104,7 +116,7 @@ func (r *voucherCompraPostgres) BuscarPorID(id, usuarioID, redeID string) (*Vouc
 	const q = `
 SELECT
   id::text, rede_id::text, usuario_id::text, campanha_id::text,
-  valor_solicitado, desconto_aplicado, valor_final, status::text,
+  valor_solicitado, desconto_aplicado, valor_final, litros::float8, status::text,
   mp_payment_id, referencia_pagamento, codigo_resgate, expira_pagamento_em, expira_resgate_em, criado_em, atualizado_em
 FROM voucher_compras
 WHERE id = $1::uuid AND usuario_id = $2::uuid AND rede_id = $3::uuid`
@@ -128,7 +140,7 @@ func (r *voucherCompraPostgres) ListarDoUsuario(redeID, usuarioID string, limite
 	rows, err := r.db.QueryContext(ctx, `
 SELECT
   id::text, rede_id::text, usuario_id::text, campanha_id::text,
-  valor_solicitado, desconto_aplicado, valor_final, status::text,
+  valor_solicitado, desconto_aplicado, valor_final, litros::float8, status::text,
   mp_payment_id, referencia_pagamento, codigo_resgate, expira_pagamento_em, expira_resgate_em, criado_em, atualizado_em
 FROM voucher_compras
 WHERE rede_id = $1::uuid AND usuario_id = $2::uuid
@@ -196,7 +208,7 @@ func (r *voucherCompraPostgres) BuscarPorIDRede(id, redeID string) (*VoucherComp
 	const q = `
 SELECT
   id::text, rede_id::text, usuario_id::text, campanha_id::text,
-  valor_solicitado, desconto_aplicado, valor_final, status::text,
+  valor_solicitado, desconto_aplicado, valor_final, litros::float8, status::text,
   mp_payment_id, referencia_pagamento, codigo_resgate, expira_pagamento_em, expira_resgate_em, criado_em, atualizado_em
 FROM voucher_compras
 WHERE id = $1::uuid AND rede_id = $2::uuid`
