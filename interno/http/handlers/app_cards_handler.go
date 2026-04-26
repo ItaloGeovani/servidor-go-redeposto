@@ -210,12 +210,14 @@ func (h *Handlers) PublicRedeInfo(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{
 		"id_rede":                   idRede,
 		"nome_fantasia":             strings.TrimSpace(rede.NomeFantasia),
+		"telefone":                  strings.TrimSpace(rede.Telefone),
 		"moeda_virtual_nome":        strings.TrimSpace(rede.MoedaVirtualNome),
 		"moeda_virtual_cotacao":     rede.MoedaVirtualCotacao,
 		"app_modulo_indique_ganhe":  rede.AppModuloIndiqueGanhe,
 		"app_modulo_checkin_diario": rede.AppModuloCheckinDiario,
 		"app_modulo_gire_ganhe":     rede.AppModuloGireGanhe,
 		"app_modulo_redes_sociais":  rede.AppModuloRedesSociais,
+		"rede_logo_url":             h.resolveRedeLogoURLPublic(idRede),
 	}
 	if h.niveisCliente != nil {
 		nc, err := h.niveisCliente.Buscar(idRede)
@@ -259,4 +261,34 @@ func (h *Handlers) PublicRedeInfo(w http.ResponseWriter, r *http.Request) {
 		out["redes_sociais"] = []any{}
 	}
 	utils.ResponderJSON(w, http.StatusOK, out)
+}
+
+// resolveRedeLogoURLPublic URL da marca para o app: imagem do card destaque (slot 0) ativo;
+// se vazio, primeiro posto da rede com logo_url preenchido.
+func (h *Handlers) resolveRedeLogoURLPublic(idRede string) string {
+	idRede = strings.TrimSpace(idRede)
+	if idRede == "" {
+		return ""
+	}
+	if h.appCardsRepo != nil {
+		cards, err := h.appCardsRepo.ListarPorRedeID(idRede)
+		if err == nil {
+			for _, c := range cards {
+				if c != nil && c.Slot == 0 && c.Ativo && strings.TrimSpace(c.ImagemURL) != "" {
+					return strings.TrimSpace(c.ImagemURL)
+				}
+			}
+		}
+	}
+	if h.postoService != nil {
+		postos, err := h.postoService.ListarPorRedeID(idRede)
+		if err == nil {
+			for _, p := range postos {
+				if p != nil && strings.TrimSpace(p.LogoURL) != "" {
+					return strings.TrimSpace(p.LogoURL)
+				}
+			}
+		}
+	}
+	return ""
 }
