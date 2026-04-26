@@ -163,6 +163,7 @@ func Nova() (*Aplicacao, error) {
 	repoAuditoria := repositorios.NovoAuditoriaPostgres(banco)
 	estatisticasPlataforma := repositorios.NovoEstatisticasPlataformaPostgres(banco)
 	repoAppMobile := repositorios.NovoAppMobileConfigPostgres(banco)
+	repoAppMobileRede := repositorios.NovoAppMobileRedePostgres(banco)
 	repoAppCards := repositorios.NovoAppCardsRedePostgres(banco)
 	repoMercadoPagoGateway := repositorios.NovoMercadoPagoGatewayPostgres(banco)
 	repoVoucherCompra := repositorios.NovoVoucherCompraPostgres(banco)
@@ -203,7 +204,7 @@ func Nova() (*Aplicacao, error) {
 		return nil, err
 	}
 
-	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, svcIndiqueGanhe, repoCarteira, svcNiveisCliente, svcCheckinDiario, svcGireGanhe, repoLinksSociais, cfg)
+	h := handlers.Novos(autenticador, svcAdmin, svcGestor, svcRede, svcUsuarioRede, svcPosto, svcCampanha, svcPremio, repoAuditoria, estatisticasPlataforma, repoAppMobile, repoAppMobileRede, repoAppCards, repoMercadoPagoGateway, svcVoucherCompra, svcCombustivelRede, svcIndiqueGanhe, repoCarteira, svcNiveisCliente, svcCheckinDiario, svcGireGanhe, repoLinksSociais, cfg)
 
 	muxPrincipal := http.NewServeMux()
 	mwGlobal := []middlewares.Middleware{

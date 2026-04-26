@@ -18,6 +18,7 @@ type Handlers struct {
 	auditoriaRepo          repositorios.AuditoriaRepositorio
 	estatisticasRepo       repositorios.EstatisticasPlataformaRepositorio
 	appMobileRepo          repositorios.AppMobileConfigRepositorio
+	appMobileRedeRepo      repositorios.AppMobileRedeRepositorio
 	appCardsRepo           repositorios.AppCardsRedeRepositorio
 	mpGatewayRepo          repositorios.MercadoPagoGatewayRepositorio
 	voucherCompraSvc       *servicos.ServicoVoucherCompra
@@ -43,6 +44,7 @@ func Novos(
 	auditoriaRepo repositorios.AuditoriaRepositorio,
 	estatisticasRepo repositorios.EstatisticasPlataformaRepositorio,
 	appMobileRepo repositorios.AppMobileConfigRepositorio,
+	appMobileRedeRepo repositorios.AppMobileRedeRepositorio,
 	appCardsRepo repositorios.AppCardsRedeRepositorio,
 	mpGatewayRepo repositorios.MercadoPagoGatewayRepositorio,
 	voucherCompraSvc *servicos.ServicoVoucherCompra,
@@ -67,6 +69,7 @@ func Novos(
 		auditoriaRepo:          auditoriaRepo,
 		estatisticasRepo:       estatisticasRepo,
 		appMobileRepo:          appMobileRepo,
+		appMobileRedeRepo:      appMobileRedeRepo,
 		appCardsRepo:           appCardsRepo,
 		mpGatewayRepo:          mpGatewayRepo,
 		voucherCompraSvc:       voucherCompraSvc,
