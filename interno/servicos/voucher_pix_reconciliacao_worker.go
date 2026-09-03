@@ -150,13 +150,11 @@ func (s *ServicoVoucherCompra) reconciliaUmVoucherPixAtivo(
 	if err != nil {
 		if errConsultaPixInexistente(err) {
 			log.Printf(
-				"voucher_pix reconcilia: tid inexistente no provedor compra=%s tid=%s ambiente=%s — nao cancela: %v",
+				"voucher_pix reconcilia: tid inexistente no provedor compra=%s tid=%s ambiente=%s — cancelando ATIVO: %v",
 				vc.ID, tid, gw.ERedeAmbiente, err,
 			)
-			if errM := s.repo.MarcarReconciliadoPix(vc.ID, vc.RedeID, agora); errM != nil {
-				log.Printf("voucher_pix reconcilia: marcar compra=%s: %v", vc.ID, errM)
-			}
-			return false, nil
+			s.ProcessarPagamentoEstornadoPorCompra(vc.RedeID, vc.ID, "reconcilia_tid_inexistente_78")
+			return true, nil
 		}
 		return false, err
 	}

@@ -36,6 +36,7 @@ func RegistrarGestorRedePainel(muxPrincipal *http.ServeMux, h *handlers.Handlers
 	mux.Handle("/v1/gestor-rede/dev/redes/niveis-cliente", http.HandlerFunc(h.NiveisClienteConfigGestor))
 	mux.Handle("/v1/gestor-rede/dev/clientes/presenca-app", http.HandlerFunc(h.ListarClientesPresencaAppPainel))
 	mux.Handle("/v1/gestor-rede/dev/clientes/carteira", http.HandlerFunc(h.ListarClientesCarteiraPainel))
+	mux.Handle("/v1/gestor-rede/dev/clientes/carteira/ajustar-saldo", http.HandlerFunc(h.PostAjustarSaldoCarteiraClientePainel))
 	mux.Handle("/v1/gestor-rede/dev/usuarios-rede/listar", http.HandlerFunc(h.ListarUsuariosRedeGestor))
 	mux.Handle("/v1/gestor-rede/dev/usuarios-rede/criar-equipe", http.HandlerFunc(h.CriarUsuarioEquipeGestorRede))
 	mux.Handle("/v1/gestor-rede/dev/usuarios-rede/editar-equipe", http.HandlerFunc(h.EditarUsuarioEquipeGestorRede))

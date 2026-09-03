@@ -1474,6 +1474,9 @@ func (s *ServicoVoucherCompra) ProcessarPagamentoEstornadoPorCompra(idRede, idCo
 	s.estornarCashbackVoucher(idRede, vc)
 	vc.Status = "CANCELADO"
 	extra := "PIX ESTORNADO — voucher cancelado, nao honrar no posto"
+	if strings.Contains(motivo, "tid_inexistente") {
+		extra = "TID inexistente no provedor (sandbox/PV errado?) — CANCELADO, nao honrar no posto"
+	}
 	if motivo != "" {
 		extra = extra + " (" + motivo + ")"
 	}
