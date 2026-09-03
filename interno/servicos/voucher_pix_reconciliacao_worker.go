@@ -32,23 +32,35 @@ func (s *ServicoVoucherCompra) ReconciliaVouchersPixAtivos(ctx context.Context) 
 	if s == nil || s.repo == nil {
 		return 0, 0, 0
 	}
+	log.Print("======= WORKER PIX RECONCILIA INICIADO ===========")
+	defer log.Print("======= WORKER PIX RECONCILIA FINALIZADO ===========")
+
 	cfg := s.cfgPixReconcilia()
 	lista, err := s.repo.ListarAtivosPixParaReconcilia(cfg.lote, cfg.grace)
 	if err != nil {
 		log.Printf("voucher_pix reconcilia: listar: %v", err)
 		return 0, 0, 1
 	}
+	log.Printf("voucher_pix reconcilia: elegiveis=%d (lote=%d grace=%s)", len(lista), cfg.lote, cfg.grace)
 	agora := time.Now()
 	for i, vc := range lista {
 		if vc == nil {
 			continue
 		}
 		if ctx.Err() != nil {
+			log.Printf(
+				"voucher_pix reconcilia: interrompido consultados=%d estornados=%d erros=%d",
+				consultados, estornados, erros,
+			)
 			return consultados, estornados, erros
 		}
 		if i > 0 {
 			select {
 			case <-ctx.Done():
+				log.Printf(
+					"voucher_pix reconcilia: interrompido consultados=%d estornados=%d erros=%d",
+					consultados, estornados, erros,
+				)
 				return consultados, estornados, erros
 			case <-time.After(defaultPixReconciliaPausa):
 			}
@@ -77,12 +89,10 @@ func (s *ServicoVoucherCompra) ReconciliaVouchersPixAtivos(ctx context.Context) 
 			estornados++
 		}
 	}
-	if consultados > 0 || estornados > 0 || erros > 0 {
-		log.Printf(
-			"voucher_pix reconcilia: ciclo consultados=%d estornados=%d erros=%d",
-			consultados, estornados, erros,
-		)
-	}
+	log.Printf(
+		"voucher_pix reconcilia: ciclo consultados=%d estornados=%d erros=%d",
+		consultados, estornados, erros,
+	)
 	return consultados, estornados, erros
 }
 
