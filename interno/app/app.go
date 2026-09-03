@@ -26,9 +26,10 @@ import (
 )
 
 type Aplicacao struct {
-	cfg      config.Config
-	servidor *http.Server
-	banco    *sql.DB
+	cfg            config.Config
+	servidor       *http.Server
+	banco          *sql.DB
+	voucherCompra  *servicos.ServicoVoucherCompra
 }
 
 // verificarCaminhoContaFCM confirma no arranque que o JSON existe e e ficheiro (log no terminal).
@@ -285,9 +286,10 @@ func Nova() (*Aplicacao, error) {
 	}
 
 	return &Aplicacao{
-		cfg:      cfg,
-		servidor: servidor,
-		banco:    banco,
+		cfg:           cfg,
+		servidor:      servidor,
+		banco:         banco,
+		voucherCompra: svcVoucherCompra,
 	}, nil
 }
 
@@ -318,6 +320,10 @@ func (a *Aplicacao) Executar(ctx context.Context) error {
 			errCh <- err
 		}
 	}()
+
+	if a.voucherCompra != nil {
+		go a.voucherCompra.StartReconciliaPixWorker(ctx)
+	}
 
 	select {
 	case <-ctx.Done():

@@ -63,22 +63,27 @@ func (h *Handlers) ERedeWebhookPublico(w http.ResponseWriter, r *http.Request) {
 		idRede, idPosto, len(body), truncarLogWebhookERede(body),
 	)
 
-	tid, aprovado, err := erede.ParseWebhook(body)
+	parsed, err := erede.ParseWebhook(body)
 	if err != nil {
 		log.Printf("erede webhook: parse rede=%s posto=%s: %v", idRede, idPosto, err)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	if !aprovado {
-		log.Printf("erede webhook: ignorado (sem PV.UPDATE_TRANSACTION_PIX) rede=%s posto=%s tid=%s", idRede, idPosto, tid)
-		w.WriteHeader(http.StatusOK)
-		return
+	switch parsed.Tipo {
+	case erede.WebhookEventoPago, erede.WebhookEventoDevolucao:
+		if h.voucherCompraSvc != nil {
+			h.voucherCompraSvc.ProcessarWebhookERedePix(r.Context(), idRede, parsed.TID, parsed.Tipo)
+		}
+		log.Printf(
+			"erede webhook: evento=%s rede=%s posto=%s tid=%s",
+			parsed.Tipo, idRede, idPosto, parsed.TID,
+		)
+	default:
+		log.Printf(
+			"erede webhook: ignorado (sem PV.UPDATE_TRANSACTION_PIX/PV.REFUND_PIX) rede=%s posto=%s tid=%s",
+			idRede, idPosto, parsed.TID,
+		)
 	}
-
-	if h.voucherCompraSvc != nil {
-		h.voucherCompraSvc.ProcessarPagamentoAprovadoERede(idRede, tid)
-	}
-	log.Printf("erede webhook: evento pix aprovado rede=%s posto=%s tid=%s", idRede, idPosto, tid)
 	w.WriteHeader(http.StatusOK)
 }
 

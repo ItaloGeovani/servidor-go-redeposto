@@ -28,8 +28,15 @@ Override opcional: `EREDE_OAUTH_SANDBOX_URL`, `EREDE_TX_SANDBOX_URL`, `EREDE_AMB
 2. Servidor: OAuth → `POST` transação `kind: pix`, valor em **centavos**, `reference` (máx. 16 caracteres).
 3. Sandbox: pagamento simulado em ~**2 minutos** após exibir o QR.
 4. Webhook público: `POST /v1/public/erede/webhook/{rede_id}` ou `.../{rede_id}/{posto_id}`.
-5. Evento: `PV.UPDATE_TRANSACTION_PIX`; `data.id` = **tid**.
-6. Servidor ativa voucher (`ATIVO`) e aplica regra de baixa no posto (`posto_id_compra` no modo POSTO).
+5. Evento pago: `PV.UPDATE_TRANSACTION_PIX`; `data.id` = **tid**. Servidor consulta o tid e ativa o voucher (`ATIVO`).
+6. Evento devolução: `PV.REFUND_PIX`. Servidor consulta o tid:
+   - status **Canceled** (devolução total) → voucher `AGUARDANDO_PAGAMENTO`/`ATIVO` vira `CANCELADO`; se já `USADO`, não altera o status e gera alerta operacional.
+   - status **Approved** com refunds (parcial) → **não** cancela o voucher.
+7. Em ambos os casos de estorno total: evento `VOUCHER_ESTORNO` + aviso no grupo WhatsApp (flag `notify_voucher_estorno`, padrão ligado).
+8. Regra de baixa no posto (`posto_id_compra` no modo POSTO) permanece; voucher `CANCELADO` não pode ser baixado.
+9. **Worker de reconciliação** (rede de segurança): a cada ~15 min reconsulta vouchers `ATIVO` PIX com grace de 15 min após `atualizado_em`. Se o provedor confirmar estorno total e o webhook tiver falhado, cancela + WhatsApp. Env: `VOUCHER_PIX_RECONCILIA_INTERVALO_MIN`, `VOUCHER_PIX_RECONCILIA_GRACE_MIN`, `VOUCHER_PIX_RECONCILIA_LOTE`, `VOUCHER_PIX_RECONCILIA_DESLIGADO`.
+
+Sandbox: QR de **R$ 50,00** simula `PV.REFUND_PIX` parcial após ~2 min — o voucher **não** deve ser cancelado nesse caso.
 
 ## Painel
 

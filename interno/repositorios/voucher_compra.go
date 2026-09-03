@@ -60,6 +60,7 @@ type VoucherCompraRegistro struct {
 	ValorMoedaFiat       float64    `json:"valor_moeda_fiat,omitempty"`
 	ValorMoedaToken      float64    `json:"valor_moeda_token,omitempty"`
 	MoedaDebitadaEm      *time.Time `json:"moeda_debitada_em,omitempty"`
+	ReconciliadoEm       *time.Time `json:"reconciliado_em,omitempty"`
 	CriadoEm             time.Time  `json:"criado_em"`
 	AtualizadoEm         time.Time  `json:"atualizado_em"`
 	TipoCompra           string     `json:"tipo_compra,omitempty"`       // LITRO | VALOR | UNIDADE (preenchido quando há JOIN campanhas)
@@ -138,7 +139,11 @@ type VoucherCompraRepositorio interface {
 	BuscarPorIDRede(id, redeID string) (*VoucherCompraRegistro, error)
 	BuscarPorGatewayTIDRede(gatewayTID, redeID string) (*VoucherCompraRegistro, error)
 	AtivarPagamentoAprovado(id, redeID, codigo string, expiraResgate time.Time) error
+	// CancelarPorPagamentoEstornado marca AGUARDANDO_PAGAMENTO ou ATIVO como CANCELADO (PIX devolvido).
+	CancelarPorPagamentoEstornado(id, redeID string) (bool, error)
 	MarcarCashbackCreditado(id, redeID string, creditadoEm time.Time) (bool, error)
+	// LimparCashbackCreditado zera cashback_creditado_em após estorno na carteira (permite auditoria do valor).
+	LimparCashbackCreditado(id, redeID string) error
 	// BuscarPorCodigoResgateConsultaEquipe voucher da rede por código de resgate + dados do cliente (nome/e-mail).
 	BuscarPorCodigoResgateConsultaEquipe(codigo, redeID string) (*VoucherCompraConsultaEquipe, error)
 	// RegistrarBaixaUso marca ATIVO ou AGUARDANDO_DINHEIRO como USADO com posto e operador.
@@ -147,6 +152,10 @@ type VoucherCompraRepositorio interface {
 	ListarPainelPorRede(redeID string, limite, offset int, statusFiltro string) ([]*VoucherCompraPainelLinha, int, error)
 	// ListarBaixasPorOperador baixas USADO do operador no intervalo [inicio, fim).
 	ListarBaixasPorOperador(redeID, operadorUsuarioID string, inicio, fim time.Time) ([]*VoucherBaixaOperadorLinha, float64, error)
+	// ListarAtivosPixParaReconcilia vouchers ATIVO PIX elegíveis ao worker (grace após atualizado_em).
+	ListarAtivosPixParaReconcilia(limite int, grace time.Duration) ([]*VoucherCompraRegistro, error)
+	// MarcarReconciliadoPix atualiza reconciliado_em sem alterar status.
+	MarcarReconciliadoPix(id, redeID string, em time.Time) error
 }
 
 var ErrVoucherBaixaNaoPermitida = errors.New("baixa nao permitida neste estado do voucher")

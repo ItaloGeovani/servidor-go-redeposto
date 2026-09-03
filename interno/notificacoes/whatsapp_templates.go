@@ -28,6 +28,35 @@ func VarianteTemplate(eventoID string) int {
 	return int(h.Sum32() % 5)
 }
 
+// Emojis de cor no topo do bloco — leitura rápida no grupo WhatsApp.
+const (
+	emojiVoucherGerado         = "🟡" // aguardando / gerado
+	emojiVoucherPago           = "🟢" // pago / ativo
+	emojiVoucherBaixa          = "🔵" // usado no posto
+	emojiVoucherEstorno        = "🔴" // refund / estorno
+	emojiVoucherReconciliaErro = "🟠" // falha ao consultar provedor
+	emojiCampanha              = "🟣"
+)
+
+func emojiParaTipo(tipo string) string {
+	switch tipo {
+	case modelos.EventoVoucherGerado:
+		return emojiVoucherGerado
+	case modelos.EventoVoucherPago:
+		return emojiVoucherPago
+	case modelos.EventoVoucherBaixa:
+		return emojiVoucherBaixa
+	case modelos.EventoVoucherEstorno:
+		return emojiVoucherEstorno
+	case modelos.EventoVoucherReconciliaErro:
+		return emojiVoucherReconciliaErro
+	case modelos.EventoCampanhaCriada, modelos.EventoCampanhaAtivada:
+		return emojiCampanha
+	default:
+		return "⚪"
+	}
+}
+
 func RenderWhatsAppTemplate(tipo string, variante int, d WhatsAppTemplateDados) string {
 	if variante < 0 || variante > 4 {
 		variante = 0
@@ -36,7 +65,8 @@ func RenderWhatsAppTemplate(tipo string, variante int, d WhatsAppTemplateDados) 
 	if cab == "" {
 		cab = "REDE"
 	}
-	header := fmt.Sprintf("== [ %s ] =====", strings.ToUpper(cab))
+	emoji := emojiParaTipo(tipo)
+	header := fmt.Sprintf("%s == [ %s ] =====", emoji, strings.ToUpper(cab))
 	data := strings.TrimSpace(d.DataHora)
 	if data == "" {
 		data = time.Now().Format("02/01/2006 15:04")
@@ -49,6 +79,10 @@ func RenderWhatsAppTemplate(tipo string, variante int, d WhatsAppTemplateDados) 
 		return renderVoucherPago(variante, header, d, data)
 	case modelos.EventoVoucherBaixa:
 		return renderVoucherBaixa(variante, header, d, data)
+	case modelos.EventoVoucherEstorno:
+		return renderVoucherEstorno(variante, header, d, data)
+	case modelos.EventoVoucherReconciliaErro:
+		return renderVoucherReconciliaErro(header, d, data)
 	case modelos.EventoCampanhaCriada:
 		return renderCampanhaCriada(variante, header, d, data)
 	case modelos.EventoCampanhaAtivada:
@@ -62,44 +96,44 @@ func renderVoucherGerado(v int, header string, d WhatsAppTemplateDados, data str
 	switch v {
 	case 1:
 		return fmt.Sprintf(`%s
-*Voucher gerado*
+%s *Voucher gerado*
 R$ %s · %s
 Meio: %s | Status: %s
 %s
-==================`, header, d.Valor, d.Quem, d.Meio, d.Status, data)
+==================`, header, emojiVoucherGerado, d.Valor, d.Quem, d.Meio, d.Status, data)
 	case 2:
 		return fmt.Sprintf(`%s
-NOVO VOUCHER
+%s NOVO VOUCHER
 Cliente: *%s*
 Valor: *R$ %s*
 Pagamento: %s (%s)
 Horário: %s
-==================`, header, d.Quem, d.Valor, d.Meio, d.Status, data)
+==================`, header, emojiVoucherGerado, d.Quem, d.Valor, d.Meio, d.Status, data)
 	case 3:
 		return fmt.Sprintf(`%s
-*Geração de voucher*
+%s *Geração de voucher*
 • Valor: R$ %s
 • Quem: %s
 • Quando: %s
 • Canal: %s
 • Situação: %s
-==================`, header, d.Valor, d.Quem, data, d.Meio, d.Status)
+==================`, header, emojiVoucherGerado, d.Valor, d.Quem, data, d.Meio, d.Status)
 	case 4:
 		return fmt.Sprintf(`%s
-*%s*
+%s *VOUCHER CRIADO*
 Valor R$ %s para %s via %s
 Status atual: %s
 Registrado em %s
-==================`, header, "VOUCHER CRIADO", d.Valor, d.Quem, d.Meio, d.Status, data)
+==================`, header, emojiVoucherGerado, d.Valor, d.Quem, d.Meio, d.Status, data)
 	default:
 		return fmt.Sprintf(`%s
-*NOVO VOUCHER GERADO*
+%s *NOVO VOUCHER GERADO*
 Valor: R$ %s
 Quem: %s
 Data: %s
 Meio: %s
 Status: %s
-==================`, header, d.Valor, d.Quem, data, d.Meio, d.Status)
+==================`, header, emojiVoucherGerado, d.Valor, d.Quem, data, d.Meio, d.Status)
 	}
 }
 
@@ -111,40 +145,40 @@ func renderVoucherPago(v int, header string, d WhatsAppTemplateDados, data strin
 	switch v {
 	case 1:
 		return fmt.Sprintf(`%s
-*Pagamento confirmado*
+%s *Pagamento confirmado*
 R$ %s — %s
 Meio %s · %s%s
-==================`, header, d.Valor, d.Quem, d.Meio, data, cod)
+==================`, header, emojiVoucherPago, d.Valor, d.Quem, d.Meio, data, cod)
 	case 2:
 		return fmt.Sprintf(`%s
-*VOUCHER PAGO*
+%s *VOUCHER PAGO*
 Cliente *%s* quitou R$ *%s*
 Via: %s
 %s%s
-==================`, header, d.Quem, d.Valor, d.Meio, data, cod)
+==================`, header, emojiVoucherPago, d.Quem, d.Valor, d.Meio, data, cod)
 	case 3:
 		return fmt.Sprintf(`%s
-PIX/pagamento OK
+%s PIX/pagamento OK
 Valor: R$ %s
 Quem: %s
 Status: %s
 %s%s
-==================`, header, d.Valor, d.Quem, d.Status, data, cod)
+==================`, header, emojiVoucherPago, d.Valor, d.Quem, d.Status, data, cod)
 	case 4:
 		return fmt.Sprintf(`%s
-*Confirmado*
+%s *Confirmado*
 *%s* pagou *R$ %s* (%s)
 Horário: %s%s
-==================`, header, d.Quem, d.Valor, d.Meio, data, cod)
+==================`, header, emojiVoucherPago, d.Quem, d.Valor, d.Meio, data, cod)
 	default:
 		return fmt.Sprintf(`%s
-*VOUCHER PAGO*
+%s *VOUCHER PAGO*
 Valor: R$ %s
 Quem: %s
 Data: %s
 Meio: %s
 Status: %s%s
-==================`, header, d.Valor, d.Quem, data, d.Meio, d.Status, cod)
+==================`, header, emojiVoucherPago, d.Valor, d.Quem, data, d.Meio, d.Status, cod)
 	}
 }
 
@@ -160,39 +194,107 @@ func renderVoucherBaixa(v int, header string, d WhatsAppTemplateDados, data stri
 	switch v {
 	case 1:
 		return fmt.Sprintf(`%s
-*Baixa no posto*
+%s *Baixa no posto*
 R$ %s · %s
 %s%s%s
-==================`, header, d.Valor, d.Quem, data, cod, op)
+==================`, header, emojiVoucherBaixa, d.Valor, d.Quem, data, cod, op)
 	case 2:
 		return fmt.Sprintf(`%s
-*VOUCHER UTILIZADO*
+%s *VOUCHER UTILIZADO*
 Cliente: *%s*
 Valor: *R$ %s*
 %s%s%s
-==================`, header, d.Quem, d.Valor, data, cod, op)
+==================`, header, emojiVoucherBaixa, d.Quem, d.Valor, data, cod, op)
 	case 3:
 		return fmt.Sprintf(`%s
-Baixa registrada
+%s Baixa registrada
 • R$ %s
 • %s
 • %s%s%s
-==================`, header, d.Valor, d.Quem, data, cod, op)
+==================`, header, emojiVoucherBaixa, d.Valor, d.Quem, data, cod, op)
 	case 4:
 		return fmt.Sprintf(`%s
-*%s*
+%s *BAIXA EFETUADA*
 %s usou voucher de R$ %s
 %s%s%s
-==================`, header, "BAIXA EFETUADA", d.Quem, d.Valor, data, cod, op)
+==================`, header, emojiVoucherBaixa, d.Quem, d.Valor, data, cod, op)
 	default:
 		return fmt.Sprintf(`%s
-*VOUCHER BAIXA*
+%s *VOUCHER BAIXA*
 Valor: R$ %s
 Quem: %s
 Data: %s
 Status: %s%s%s
-==================`, header, d.Valor, d.Quem, data, d.Status, cod, op)
+==================`, header, emojiVoucherBaixa, d.Valor, d.Quem, data, d.Status, cod, op)
 	}
+}
+
+func renderVoucherEstorno(v int, header string, d WhatsAppTemplateDados, data string) string {
+	cod := ""
+	if strings.TrimSpace(d.Codigo) != "" {
+		cod = "\nCódigo: " + strings.TrimSpace(d.Codigo)
+	}
+	extra := strings.TrimSpace(d.Extra)
+	if extra != "" {
+		extra = "\n" + extra
+	}
+	switch v {
+	case 1:
+		return fmt.Sprintf(`%s
+%s *PIX ESTORNADO*
+R$ %s — %s
+Status: %s
+%s%s%s
+==================`, header, emojiVoucherEstorno, d.Valor, d.Quem, d.Status, data, cod, extra)
+	case 2:
+		return fmt.Sprintf(`%s
+%s *PAGAMENTO DEVOLVIDO*
+Cliente *%s* · R$ *%s*
+Via: %s · %s%s%s
+==================`, header, emojiVoucherEstorno, d.Quem, d.Valor, d.Meio, data, cod, extra)
+	case 3:
+		return fmt.Sprintf(`%s
+%s Estorno PIX
+• Valor: R$ %s
+• Quem: %s
+• Status: %s
+• %s%s%s
+==================`, header, emojiVoucherEstorno, d.Valor, d.Quem, d.Status, data, cod, extra)
+	case 4:
+		return fmt.Sprintf(`%s
+%s *PIX DEVOLVIDO*
+*%s* — R$ %s (%s)
+%s%s%s
+==================`, header, emojiVoucherEstorno, d.Quem, d.Valor, d.Meio, data, cod, extra)
+	default:
+		return fmt.Sprintf(`%s
+%s *PIX ESTORNADO / DEVOLVIDO*
+Valor: R$ %s
+Quem: %s
+Data: %s
+Meio: %s
+Status: %s%s%s
+==================`, header, emojiVoucherEstorno, d.Valor, d.Quem, data, d.Meio, d.Status, cod, extra)
+	}
+}
+
+func renderVoucherReconciliaErro(header string, d WhatsAppTemplateDados, data string) string {
+	cod := ""
+	if strings.TrimSpace(d.Codigo) != "" {
+		cod = "\nCódigo: " + strings.TrimSpace(d.Codigo)
+	}
+	extra := strings.TrimSpace(d.Extra)
+	if extra != "" {
+		extra = "\n" + extra
+	}
+	return fmt.Sprintf(`%s
+%s *ERRO AO VERIFICAR PIX*
+Valor: R$ %s
+Quem: %s
+Data: %s
+Meio: %s
+Status: %s%s%s
+==================`, header, emojiVoucherReconciliaErro, d.Valor, d.Quem, data, d.Meio, d.Status, cod, extra)
 }
 
 func renderCampanhaCriada(v int, header string, d WhatsAppTemplateDados, data string) string {

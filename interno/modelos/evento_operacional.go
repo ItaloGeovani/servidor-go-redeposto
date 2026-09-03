@@ -6,11 +6,13 @@ import (
 )
 
 const (
-	EventoVoucherGerado  = "VOUCHER_GERADO"
-	EventoVoucherPago    = "VOUCHER_PAGO"
-	EventoVoucherBaixa   = "VOUCHER_BAIXA"
-	EventoCampanhaCriada = "CAMPANHA_CRIADA"
-	EventoCampanhaAtivada = "CAMPANHA_ATIVADA"
+	EventoVoucherGerado         = "VOUCHER_GERADO"
+	EventoVoucherPago           = "VOUCHER_PAGO"
+	EventoVoucherBaixa          = "VOUCHER_BAIXA"
+	EventoVoucherEstorno        = "VOUCHER_ESTORNO"
+	EventoVoucherReconciliaErro = "VOUCHER_RECONCILIA_ERRO"
+	EventoCampanhaCriada        = "CAMPANHA_CRIADA"
+	EventoCampanhaAtivada       = "CAMPANHA_ATIVADA"
 )
 
 // EventoOperacional log de negócio da rede.
@@ -37,11 +39,12 @@ type RedeWhatsAppNotificacoes struct {
 	InstanceToken       string    `json:"instance_token,omitempty"`
 	InstanceTokenMasked string    `json:"instance_token_masked,omitempty"`
 	GroupJID            string    `json:"group_jid"`
-	NotifyVoucherGerado bool      `json:"notify_voucher_gerado"`
-	NotifyVoucherPago   bool      `json:"notify_voucher_pago"`
-	NotifyVoucherBaixa  bool      `json:"notify_voucher_baixa"`
-	NotifyCampanha      bool      `json:"notify_campanha"`
-	AtualizadoEm        time.Time `json:"atualizado_em"`
+	NotifyVoucherGerado  bool      `json:"notify_voucher_gerado"`
+	NotifyVoucherPago    bool      `json:"notify_voucher_pago"`
+	NotifyVoucherBaixa   bool      `json:"notify_voucher_baixa"`
+	NotifyVoucherEstorno bool      `json:"notify_voucher_estorno"`
+	NotifyCampanha       bool      `json:"notify_campanha"`
+	AtualizadoEm         time.Time `json:"atualizado_em"`
 }
 
 func (c *RedeWhatsAppNotificacoes) FlagParaTipo(tipo string) bool {
@@ -55,6 +58,11 @@ func (c *RedeWhatsAppNotificacoes) FlagParaTipo(tipo string) bool {
 		return c.NotifyVoucherPago
 	case EventoVoucherBaixa:
 		return c.NotifyVoucherBaixa
+	case EventoVoucherEstorno:
+		return c.NotifyVoucherEstorno
+	case EventoVoucherReconciliaErro:
+		// Mesmo interruptor do estorno: falha ao verificar PIX no worker.
+		return c.NotifyVoucherEstorno
 	case EventoCampanhaCriada, EventoCampanhaAtivada:
 		return c.NotifyCampanha
 	default:

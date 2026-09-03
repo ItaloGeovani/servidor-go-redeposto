@@ -782,6 +782,41 @@ WHERE id = $1::uuid AND rede_id = $2::uuid
 	return nil
 }
 
+func (r *voucherCompraPostgres) CancelarPorPagamentoEstornado(id, redeID string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	id = strings.TrimSpace(id)
+	redeID = strings.TrimSpace(redeID)
+	if id == "" || redeID == "" {
+		return false, errors.New("dados invalidos para cancelar voucher")
+	}
+	res, err := r.db.ExecContext(ctx, `
+UPDATE voucher_compras SET
+  status = 'CANCELADO',
+  atualizado_em = NOW()
+WHERE id = $1::uuid AND rede_id = $2::uuid
+  AND status IN ('AGUARDANDO_PAGAMENTO', 'ATIVO')
+`, id, redeID)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+func (r *voucherCompraPostgres) LimparCashbackCreditado(id, redeID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := r.db.ExecContext(ctx, `
+UPDATE voucher_compras
+SET cashback_creditado_em = NULL,
+    atualizado_em = NOW()
+WHERE id = $1::uuid AND rede_id = $2::uuid
+  AND cashback_creditado_em IS NOT NULL
+`, strings.TrimSpace(id), strings.TrimSpace(redeID))
+	return err
+}
+
 func (r *voucherCompraPostgres) MarcarCashbackCreditado(id, redeID string, creditadoEm time.Time) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1066,3 +1101,94 @@ LIMIT 500
 	}
 	return out, soma, rows.Err()
 }
+
+func (r *voucherCompraPostgres) ListarAtivosPixParaReconcilia(limite int, grace time.Duration) ([]*VoucherCompraRegistro, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if limite < 1 {
+		limite = 40
+	}
+	if limite > 200 {
+		limite = 200
+	}
+	if grace < time.Minute {
+		grace = 15 * time.Minute
+	}
+	graceSec := int64(grace.Seconds())
+	rows, err := r.db.QueryContext(ctx, `
+SELECT
+  v.id::text,
+  v.rede_id::text,
+  v.usuario_id::text,
+  v.status,
+  COALESCE(NULLIF(TRIM(v.meio_pagamento), ''), 'PIX'),
+  COALESCE(NULLIF(TRIM(v.gateway_provedor), ''), ''),
+  v.gateway_tid,
+  v.mp_payment_id,
+  v.posto_id_compra::text,
+  v.atualizado_em,
+  v.reconciliado_em
+FROM voucher_compras v
+WHERE v.status = 'ATIVO'
+  AND COALESCE(NULLIF(TRIM(v.meio_pagamento), ''), 'PIX') = 'PIX'
+  AND (
+    (v.gateway_tid IS NOT NULL AND TRIM(v.gateway_tid) <> '')
+    OR v.mp_payment_id IS NOT NULL
+  )
+  AND v.atualizado_em <= NOW() - ($1::bigint * INTERVAL '1 second')
+ORDER BY v.reconciliado_em NULLS FIRST, v.atualizado_em ASC
+LIMIT $2
+`, graceSec, limite)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*VoucherCompraRegistro
+	for rows.Next() {
+		var x VoucherCompraRegistro
+		var gwTID sql.NullString
+		var mpID sql.NullInt64
+		var posto sql.NullString
+		var rec sql.NullTime
+		if err := rows.Scan(
+			&x.ID, &x.RedeID, &x.UsuarioID, &x.Status, &x.MeioPagamento,
+			&x.GatewayProvedor, &gwTID, &mpID, &posto, &x.AtualizadoEm, &rec,
+		); err != nil {
+			return nil, err
+		}
+		if gwTID.Valid && strings.TrimSpace(gwTID.String) != "" {
+			s := strings.TrimSpace(gwTID.String)
+			x.GatewayTID = &s
+		}
+		if mpID.Valid {
+			v := mpID.Int64
+			x.MpPaymentID = &v
+		}
+		if posto.Valid && strings.TrimSpace(posto.String) != "" {
+			s := strings.TrimSpace(posto.String)
+			x.PostoCompraID = &s
+		}
+		if rec.Valid {
+			t := rec.Time
+			x.ReconciliadoEm = &t
+		}
+		out = append(out, &x)
+	}
+	if out == nil {
+		out = []*VoucherCompraRegistro{}
+	}
+	return out, rows.Err()
+}
+
+func (r *voucherCompraPostgres) MarcarReconciliadoPix(id, redeID string, em time.Time) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := r.db.ExecContext(ctx, `
+UPDATE voucher_compras
+SET reconciliado_em = $3,
+    atualizado_em = atualizado_em
+WHERE id = $1::uuid AND rede_id = $2::uuid
+`, strings.TrimSpace(id), strings.TrimSpace(redeID), em)
+	return err
+}
+

@@ -111,15 +111,24 @@ func (h *Handlers) MercadoPagoWebhookPublico(w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	if strings.TrimSpace(pay.Status) != "approved" {
+	if strings.TrimSpace(pay.Status) == "approved" {
+		if h.voucherCompraSvc != nil {
+			h.voucherCompraSvc.ProcessarPagamentoAprovadoMercadoPago(idRede, strings.TrimSpace(pay.ExternalReference))
+		}
+		servicos.LogPagamentoAprovadoWebhook(idRede, paymentID, pay.ExternalReference, pay.Status)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
-	if h.voucherCompraSvc != nil {
-		h.voucherCompraSvc.ProcessarPagamentoAprovadoMercadoPago(idRede, strings.TrimSpace(pay.ExternalReference))
+	st := strings.ToLower(strings.TrimSpace(pay.Status))
+	switch st {
+	case "refunded", "charged_back", "cancelled", "canceled":
+		if h.voucherCompraSvc != nil {
+			h.voucherCompraSvc.ProcessarPagamentoEstornadoMercadoPago(
+				idRede, strings.TrimSpace(pay.ExternalReference), st,
+			)
+		}
+		log.Printf("mercadopago webhook: estorno rede=%s payment=%d status=%s ref=%s", idRede, paymentID, st, pay.ExternalReference)
 	}
-	servicos.LogPagamentoAprovadoWebhook(idRede, paymentID, pay.ExternalReference, pay.Status)
 	w.WriteHeader(http.StatusOK)
 }
 

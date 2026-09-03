@@ -24,6 +24,7 @@ import (
 const (
 	prefixoRefVoucherCompra           = "vcompra:"
 	tipoRefVoucherCashback            = "voucher_cashback"
+	tipoRefVoucherCashbackEstorno     = "voucher_cashback_estorno"
 	defaultMinutosPagamentoPixVoucher = 30
 	defaultDiasValidadeResgateVoucher = 7
 	minDiasVoucherResgate             = 1
@@ -177,6 +178,10 @@ func (s *ServicoVoucherCompra) registrarEventoVoucher(tipo string, reg *reposito
 		titulo = "Voucher pago"
 	case modelos.EventoVoucherBaixa:
 		titulo = "Voucher baixa"
+	case modelos.EventoVoucherEstorno:
+		titulo = "Pagamento estornado"
+	case modelos.EventoVoucherReconciliaErro:
+		titulo = "Erro ao verificar PIX"
 	}
 	s.eventos.Registrar(RegistrarEventoInput{
 		IDRede:       reg.RedeID,
@@ -1332,8 +1337,6 @@ func (s *ServicoVoucherCompra) ProcessarPagamentoAprovadoERede(idRede, tid strin
 	if tid == "" {
 		return
 	}
-	// Buscar por gateway_tid via BuscarPorIDRede após achar compra - usar repo se existir
-	// Fallback: consultar não temos list by tid - add repo method or search
 	vc, err := s.repo.BuscarPorGatewayTIDRede(tid, idRede)
 	if err != nil {
 		log.Printf("voucher erede webhook: buscar tid=%s: %v", tid, err)
@@ -1344,6 +1347,174 @@ func (s *ServicoVoucherCompra) ProcessarPagamentoAprovadoERede(idRede, tid strin
 		return
 	}
 	s.processarAtivacaoVoucher(idRede, vc.ID)
+}
+
+// ProcessarWebhookERedePix trata PV.UPDATE_TRANSACTION_PIX / PV.REFUND_PIX após consulta do tid.
+func (s *ServicoVoucherCompra) ProcessarWebhookERedePix(ctx context.Context, idRede, tid, tipoEvento string) {
+	idRede = strings.TrimSpace(idRede)
+	tid = strings.TrimSpace(tid)
+	tipoEvento = strings.TrimSpace(tipoEvento)
+	if idRede == "" || tid == "" {
+		return
+	}
+	vc, err := s.repo.BuscarPorGatewayTIDRede(tid, idRede)
+	if err != nil {
+		log.Printf("voucher erede webhook: buscar tid=%s: %v", tid, err)
+		return
+	}
+	idPosto := ""
+	if vc.PostoCompraID != nil {
+		idPosto = strings.TrimSpace(*vc.PostoCompraID)
+	}
+	gw, err := ResolverGatewayPagamento(s.rede, s.mpGW, s.eredeGW, s.posto, s.cfg, idRede, idPosto)
+	if err != nil {
+		log.Printf("voucher erede webhook: gateway tid=%s: %v", tid, err)
+		s.processarWebhookERedeSemConsulta(idRede, tid, vc.ID, tipoEvento)
+		return
+	}
+	pix, err := ConsultarPixVoucher(ctx, gw, modelos.GatewayProvedorERede, tid, nil)
+	if err != nil {
+		log.Printf("voucher erede webhook: consulta tid=%s: %v", tid, err)
+		s.processarWebhookERedeSemConsulta(idRede, tid, vc.ID, tipoEvento)
+		return
+	}
+	st := strings.TrimSpace(pix.Status)
+	log.Printf(
+		"voucher erede webhook: tid=%s evento=%s status_provedor=%q label=%q compra=%s",
+		tid, tipoEvento, st, strings.TrimSpace(pix.GatewayStatusLabel), vc.ID,
+	)
+	switch st {
+	case "refunded":
+		s.ProcessarPagamentoEstornadoPorCompra(idRede, vc.ID, "erede_canceled")
+	case "approved":
+		if tipoEvento == "devolucao" {
+			// Devolução parcial: status permanece Approved até zerar.
+			log.Printf("voucher erede webhook: devolucao parcial tid=%s compra=%s — nao cancela", tid, vc.ID)
+			return
+		}
+		s.ProcessarPagamentoAprovadoERede(idRede, tid)
+	default:
+		if tipoEvento == "devolucao" {
+			s.ProcessarPagamentoEstornadoPorCompra(idRede, vc.ID, "erede_devolucao_"+st)
+			return
+		}
+		if tipoEvento == "pago" {
+			// Evento de pagamento com consulta ainda pendente: ativa pelo evento.
+			s.ProcessarPagamentoAprovadoERede(idRede, tid)
+		}
+	}
+}
+
+func (s *ServicoVoucherCompra) processarWebhookERedeSemConsulta(idRede, tid, idCompra, tipoEvento string) {
+	switch tipoEvento {
+	case "pago":
+		s.ProcessarPagamentoAprovadoERede(idRede, tid)
+	case "devolucao":
+		s.ProcessarPagamentoEstornadoPorCompra(idRede, idCompra, "erede_webhook_sem_consulta")
+	}
+}
+
+// ProcessarPagamentoEstornadoMercadoPago cancela voucher se o payment foi estornado/cancelado.
+func (s *ServicoVoucherCompra) ProcessarPagamentoEstornadoMercadoPago(idRede, ref, statusMP string) {
+	ref = strings.TrimSpace(ref)
+	idCompra, ok := parseRefVcompra(ref)
+	if !ok {
+		return
+	}
+	s.ProcessarPagamentoEstornadoPorCompra(idRede, idCompra, "mp_"+strings.TrimSpace(statusMP))
+}
+
+// ProcessarPagamentoEstornadoPorCompra invalida voucher não usado e notifica o grupo (WhatsApp).
+func (s *ServicoVoucherCompra) ProcessarPagamentoEstornadoPorCompra(idRede, idCompra, motivo string) {
+	idRede = strings.TrimSpace(idRede)
+	idCompra = strings.TrimSpace(idCompra)
+	motivo = strings.TrimSpace(motivo)
+	if idRede == "" || idCompra == "" {
+		return
+	}
+	vc, err := s.repo.BuscarPorIDRede(idCompra, idRede)
+	if err != nil {
+		log.Printf("voucher estorno: buscar %s: %v", idCompra, err)
+		return
+	}
+	statusAntes := strings.TrimSpace(vc.Status)
+	switch statusAntes {
+	case "CANCELADO":
+		return
+	case "USADO":
+		log.Printf("voucher estorno: compra=%s ja USADO motivo=%s — alerta operacional", idCompra, motivo)
+		extra := "ALERTA: pagamento devolvido depois da baixa no posto — conferir"
+		if motivo != "" {
+			extra = extra + " (" + motivo + ")"
+		}
+		vc.Status = "USADO"
+		s.registrarEventoVoucher(modelos.EventoVoucherEstorno, vc, extra)
+		return
+	case "AGUARDANDO_PAGAMENTO", "ATIVO":
+		// segue
+	default:
+		log.Printf("voucher estorno: compra=%s status=%s motivo=%s — ignorado", idCompra, statusAntes, motivo)
+		return
+	}
+
+	ok, err := s.repo.CancelarPorPagamentoEstornado(idCompra, idRede)
+	if err != nil {
+		log.Printf("voucher estorno: cancelar id=%s: %v", idCompra, err)
+		return
+	}
+	if !ok {
+		// Corrida: pode ter virado USADO entre o SELECT e o UPDATE.
+		vc2, err2 := s.repo.BuscarPorIDRede(idCompra, idRede)
+		if err2 == nil && strings.TrimSpace(vc2.Status) == "USADO" {
+			s.ProcessarPagamentoEstornadoPorCompra(idRede, idCompra, motivo)
+		}
+		return
+	}
+	log.Printf("voucher estorno: cancelado id=%s status_antes=%s motivo=%s", idCompra, statusAntes, motivo)
+	s.estornarCashbackVoucher(idRede, vc)
+	vc.Status = "CANCELADO"
+	extra := "PIX ESTORNADO — voucher cancelado, nao honrar no posto"
+	if motivo != "" {
+		extra = extra + " (" + motivo + ")"
+	}
+	s.registrarEventoVoucher(modelos.EventoVoucherEstorno, vc, extra)
+}
+
+func (s *ServicoVoucherCompra) estornarCashbackVoucher(idRede string, vc *repositorios.VoucherCompraRegistro) {
+	if vc == nil || vc.CashbackCreditadoEm == nil || vc.CashbackValor <= 0 {
+		return
+	}
+	if s.carteira == nil {
+		log.Printf("voucher cashback estorno: carteira indisponivel compra=%s", vc.ID)
+		return
+	}
+	uid := strings.TrimSpace(vc.UsuarioID)
+	if uid == "" {
+		return
+	}
+	rede, err := s.rede.BuscarPorID(idRede)
+	if err != nil {
+		log.Printf("voucher cashback estorno: rede %s: %v", idRede, err)
+		return
+	}
+	cotacao := rede.MoedaVirtualCotacao
+	if cotacao <= 0 {
+		return
+	}
+	valorFiat := floor2(vc.CashbackValor)
+	valorToken := floor6(valorFiat / cotacao)
+	if valorToken <= 0 {
+		return
+	}
+	if err := s.carteira.DebitarMoeda(idRede, uid, valorToken, tipoRefVoucherCashbackEstorno, vc.ID); err != nil {
+		log.Printf("voucher cashback estorno: debitar compra=%s: %v", vc.ID, err)
+		return
+	}
+	if err := s.repo.LimparCashbackCreditado(vc.ID, idRede); err != nil {
+		log.Printf("voucher cashback estorno: limpar marca compra=%s: %v", vc.ID, err)
+		return
+	}
+	log.Printf("voucher cashback estorno: ok compra=%s token=%0.6f", vc.ID, valorToken)
 }
 
 func (s *ServicoVoucherCompra) processarAtivacaoVoucher(idRede, idCompra string) {

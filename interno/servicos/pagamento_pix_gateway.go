@@ -85,7 +85,10 @@ func ConsultarPixVoucher(ctx context.Context, gw *GatewayContext, provedor, gate
 			return nil, err
 		}
 		st := "pending"
-		if erede.TransacaoAprovadaPix(tx) {
+		switch {
+		case erede.TransacaoCanceladaPix(tx):
+			st = "refunded"
+		case erede.TransacaoAprovadaPix(tx):
 			st = "approved"
 		}
 		ref := strings.TrimSpace(tx.Reference)

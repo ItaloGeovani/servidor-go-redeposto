@@ -146,6 +146,7 @@ SELECT
   notify_voucher_gerado,
   notify_voucher_pago,
   notify_voucher_baixa,
+  COALESCE(notify_voucher_estorno, TRUE),
   notify_campanha,
   atualizado_em
 FROM rede_whatsapp_notificacoes
@@ -153,16 +154,17 @@ WHERE rede_id = $1::uuid`
 	var c modelos.RedeWhatsAppNotificacoes
 	err := r.db.QueryRowContext(ctx, q, strings.TrimSpace(idRede)).Scan(
 		&c.IDRede, &c.Habilitado, &c.InstanceName, &c.InstanceToken, &c.GroupJID,
-		&c.NotifyVoucherGerado, &c.NotifyVoucherPago, &c.NotifyVoucherBaixa, &c.NotifyCampanha,
-		&c.AtualizadoEm,
+		&c.NotifyVoucherGerado, &c.NotifyVoucherPago, &c.NotifyVoucherBaixa, &c.NotifyVoucherEstorno,
+		&c.NotifyCampanha, &c.AtualizadoEm,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return &modelos.RedeWhatsAppNotificacoes{
-			IDRede:              strings.TrimSpace(idRede),
-			NotifyVoucherGerado: true,
-			NotifyVoucherPago:   true,
-			NotifyVoucherBaixa:  true,
-			NotifyCampanha:      true,
+			IDRede:               strings.TrimSpace(idRede),
+			NotifyVoucherGerado:  true,
+			NotifyVoucherPago:    true,
+			NotifyVoucherBaixa:   true,
+			NotifyVoucherEstorno: true,
+			NotifyCampanha:       true,
 		}, nil
 	}
 	if err != nil {
@@ -177,9 +179,10 @@ func (r *whatsAppNotificacoesPostgres) Upsert(c *modelos.RedeWhatsAppNotificacoe
 	const q = `
 INSERT INTO rede_whatsapp_notificacoes (
   rede_id, habilitado, instance_name, instance_token, group_jid,
-  notify_voucher_gerado, notify_voucher_pago, notify_voucher_baixa, notify_campanha, atualizado_em
+  notify_voucher_gerado, notify_voucher_pago, notify_voucher_baixa, notify_voucher_estorno,
+  notify_campanha, atualizado_em
 ) VALUES (
-  $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, NOW()
+  $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()
 )
 ON CONFLICT (rede_id) DO UPDATE SET
   habilitado = EXCLUDED.habilitado,
@@ -192,6 +195,7 @@ ON CONFLICT (rede_id) DO UPDATE SET
   notify_voucher_gerado = EXCLUDED.notify_voucher_gerado,
   notify_voucher_pago = EXCLUDED.notify_voucher_pago,
   notify_voucher_baixa = EXCLUDED.notify_voucher_baixa,
+  notify_voucher_estorno = EXCLUDED.notify_voucher_estorno,
   notify_campanha = EXCLUDED.notify_campanha,
   atualizado_em = NOW()
 RETURNING atualizado_em`
@@ -199,6 +203,7 @@ RETURNING atualizado_em`
 		ctx, q,
 		strings.TrimSpace(c.IDRede), c.Habilitado,
 		strings.TrimSpace(c.InstanceName), strings.TrimSpace(c.InstanceToken), strings.TrimSpace(c.GroupJID),
-		c.NotifyVoucherGerado, c.NotifyVoucherPago, c.NotifyVoucherBaixa, c.NotifyCampanha,
+		c.NotifyVoucherGerado, c.NotifyVoucherPago, c.NotifyVoucherBaixa, c.NotifyVoucherEstorno,
+		c.NotifyCampanha,
 	).Scan(&c.AtualizadoEm)
 }

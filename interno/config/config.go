@@ -33,6 +33,11 @@ type Config struct {
 	APIImgBBKey string
 	// EvolutionGoBaseURL: URL base Evolution Go (ex. https://corenect.pro). Vazio = WhatsApp desligado.
 	EvolutionGoBaseURL string
+	// Worker de reconciliação PIX (vouchers ATIVO).
+	VoucherPixReconciliaDesligado bool
+	VoucherPixReconciliaIntervalo time.Duration
+	VoucherPixReconciliaGrace     time.Duration
+	VoucherPixReconciliaLote      int
 }
 
 func Carregar() Config {
@@ -41,22 +46,48 @@ func Carregar() Config {
 		strings.TrimSpace(utils.ObterEnv("FCM_BASE_DIR", "")),
 	)
 	return Config{
-		Ambiente:               utils.ObterEnv("APP_AMBIENTE", "desenvolvimento"),
-		FcmCaminhoContaServico: fcm,
-		PortaHTTP:              portaHTTP(),
-		PastaPainelWeb:         strings.TrimSpace(utils.ObterEnv("PAINEL_WEB_ASSETS", "")),
-		PastaReleases:          strings.TrimSpace(utils.ObterEnv("RELEASES_DIR", "")),
-		TokenPadraoAPI:         utils.ObterEnv("API_TOKEN_PADRAO", "dev-super-admin"),
-		AdminNomePadrao:        utils.ObterEnv("ADMIN_NOME_PADRAO", "Administrador Geral"),
-		AdminEmailPadrao:       utils.ObterEnv("ADMIN_EMAIL_PADRAO", "admin@gaspass.local"),
-		AdminSenhaPadrao:       utils.ObterEnv("ADMIN_SENHA_PADRAO", "123456"),
-		AdminBootstrapAtivado:  utils.ObterEnv("ADMIN_BOOTSTRAP_ATIVADO", "true") == "true",
-		CORSOrigemPermitida:    utils.ObterEnv("CORS_ORIGEM_PERMITIDA", "http://localhost:5173"),
-		PublicBaseURL:          strings.TrimRight(strings.TrimSpace(utils.ObterEnv("PUBLIC_BASE_URL", "")), "/"),
-		SessaoAPIDuracao:       duracaoSessaoAPI(),
-		APIImgBBKey:            strings.TrimSpace(utils.ObterEnv("API_IMGBB_KEY", "")),
-		EvolutionGoBaseURL:     strings.TrimRight(strings.TrimSpace(utils.ObterEnv("EVOLUTION_GO_BASE_URL", "")), "/"),
+		Ambiente:                      utils.ObterEnv("APP_AMBIENTE", "desenvolvimento"),
+		FcmCaminhoContaServico:        fcm,
+		PortaHTTP:                     portaHTTP(),
+		PastaPainelWeb:                strings.TrimSpace(utils.ObterEnv("PAINEL_WEB_ASSETS", "")),
+		PastaReleases:                 strings.TrimSpace(utils.ObterEnv("RELEASES_DIR", "")),
+		TokenPadraoAPI:                utils.ObterEnv("API_TOKEN_PADRAO", "dev-super-admin"),
+		AdminNomePadrao:               utils.ObterEnv("ADMIN_NOME_PADRAO", "Administrador Geral"),
+		AdminEmailPadrao:              utils.ObterEnv("ADMIN_EMAIL_PADRAO", "admin@gaspass.local"),
+		AdminSenhaPadrao:              utils.ObterEnv("ADMIN_SENHA_PADRAO", "123456"),
+		AdminBootstrapAtivado:         utils.ObterEnv("ADMIN_BOOTSTRAP_ATIVADO", "true") == "true",
+		CORSOrigemPermitida:           utils.ObterEnv("CORS_ORIGEM_PERMITIDA", "http://localhost:5173"),
+		PublicBaseURL:                 strings.TrimRight(strings.TrimSpace(utils.ObterEnv("PUBLIC_BASE_URL", "")), "/"),
+		SessaoAPIDuracao:              duracaoSessaoAPI(),
+		APIImgBBKey:                   strings.TrimSpace(utils.ObterEnv("API_IMGBB_KEY", "")),
+		EvolutionGoBaseURL:            strings.TrimRight(strings.TrimSpace(utils.ObterEnv("EVOLUTION_GO_BASE_URL", "")), "/"),
+		VoucherPixReconciliaDesligado: utils.ObterEnvSimNao("VOUCHER_PIX_RECONCILIA_DESLIGADO", false),
+		VoucherPixReconciliaIntervalo: duracaoMinutosEnv("VOUCHER_PIX_RECONCILIA_INTERVALO_MIN", 15, 5, 1440),
+		VoucherPixReconciliaGrace:     duracaoMinutosEnv("VOUCHER_PIX_RECONCILIA_GRACE_MIN", 15, 5, 1440),
+		VoucherPixReconciliaLote:      loteReconciliaPix(),
 	}
+}
+
+func loteReconciliaPix() int {
+	n := utils.ObterEnvInt("VOUCHER_PIX_RECONCILIA_LOTE", 40)
+	if n < 1 {
+		n = 1
+	}
+	if n > 200 {
+		n = 200
+	}
+	return n
+}
+
+func duracaoMinutosEnv(chave string, padrao, min, max int) time.Duration {
+	d := utils.ObterEnvInt(chave, padrao)
+	if d < min {
+		d = min
+	}
+	if d > max {
+		d = max
+	}
+	return time.Duration(d) * time.Minute
 }
 
 // duracaoSessaoAPI: env SESSAO_DURACAO_DIAS (1–365), default 180 (6 meses).

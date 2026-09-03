@@ -58,14 +58,15 @@ func (h *Handlers) putWhatsAppNotificacoesGestor(w http.ResponseWriter, r *http.
 		return
 	}
 	var req struct {
-		Habilitado          *bool   `json:"habilitado"`
-		InstanceName        *string `json:"instance_name"`
-		InstanceToken       *string `json:"instance_token"`
-		GroupJID            *string `json:"group_jid"`
-		NotifyVoucherGerado *bool   `json:"notify_voucher_gerado"`
-		NotifyVoucherPago   *bool   `json:"notify_voucher_pago"`
-		NotifyVoucherBaixa  *bool   `json:"notify_voucher_baixa"`
-		NotifyCampanha      *bool   `json:"notify_campanha"`
+		Habilitado           *bool   `json:"habilitado"`
+		InstanceName         *string `json:"instance_name"`
+		InstanceToken        *string `json:"instance_token"`
+		GroupJID             *string `json:"group_jid"`
+		NotifyVoucherGerado  *bool   `json:"notify_voucher_gerado"`
+		NotifyVoucherPago    *bool   `json:"notify_voucher_pago"`
+		NotifyVoucherBaixa   *bool   `json:"notify_voucher_baixa"`
+		NotifyVoucherEstorno *bool   `json:"notify_voucher_estorno"`
+		NotifyCampanha       *bool   `json:"notify_campanha"`
 	}
 	if err := utils.DecodificarJSON(r, &req); err != nil {
 		utils.ResponderErro(w, http.StatusBadRequest, utils.MensagemDecodeJSON(err))
@@ -99,6 +100,9 @@ func (h *Handlers) putWhatsAppNotificacoesGestor(w http.ResponseWriter, r *http.
 	}
 	if req.NotifyVoucherBaixa != nil {
 		atual.NotifyVoucherBaixa = *req.NotifyVoucherBaixa
+	}
+	if req.NotifyVoucherEstorno != nil {
+		atual.NotifyVoucherEstorno = *req.NotifyVoucherEstorno
 	}
 	if req.NotifyCampanha != nil {
 		atual.NotifyCampanha = *req.NotifyCampanha
