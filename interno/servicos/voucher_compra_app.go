@@ -852,7 +852,7 @@ func (s *ServicoVoucherCompra) RetomarDadosPixPendente(ctx context.Context, idCo
 	if vc.PostoCompraID != nil {
 		idPosto = strings.TrimSpace(*vc.PostoCompraID)
 	}
-	gw, err := ResolverGatewayPagamento(s.rede, s.mpGW, s.eredeGW, s.posto, s.cfg, idRede, idPosto)
+	gw, err := ResolverGatewayPagamentoConsulta(s.rede, s.mpGW, s.eredeGW, s.posto, s.cfg, idRede, idPosto)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1061,7 +1061,7 @@ func (s *ServicoVoucherCompra) tentarSincronizarStatusPixPendente(ctx context.Co
 	if vc.PostoCompraID != nil {
 		idPosto = strings.TrimSpace(*vc.PostoCompraID)
 	}
-	gw, err := ResolverGatewayPagamento(s.rede, s.mpGW, s.eredeGW, s.posto, s.cfg, idRede, idPosto)
+	gw, err := ResolverGatewayPagamentoConsulta(s.rede, s.mpGW, s.eredeGW, s.posto, s.cfg, idRede, idPosto)
 	if err != nil {
 		log.Printf("voucher_pix sync: gateway compra=%s posto=%s: %v", vc.ID, idPosto, err)
 		return
@@ -1366,7 +1366,7 @@ func (s *ServicoVoucherCompra) ProcessarWebhookERedePix(ctx context.Context, idR
 	if vc.PostoCompraID != nil {
 		idPosto = strings.TrimSpace(*vc.PostoCompraID)
 	}
-	gw, err := ResolverGatewayPagamento(s.rede, s.mpGW, s.eredeGW, s.posto, s.cfg, idRede, idPosto)
+	gw, err := ResolverGatewayPagamentoConsulta(s.rede, s.mpGW, s.eredeGW, s.posto, s.cfg, idRede, idPosto)
 	if err != nil {
 		log.Printf("voucher erede webhook: gateway tid=%s: %v", tid, err)
 		s.processarWebhookERedeSemConsulta(idRede, tid, vc.ID, tipoEvento)

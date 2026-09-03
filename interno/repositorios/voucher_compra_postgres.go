@@ -1136,6 +1136,10 @@ WHERE v.status = 'ATIVO'
     OR v.mp_payment_id IS NOT NULL
   )
   AND v.atualizado_em <= NOW() - ($1::bigint * INTERVAL '1 second')
+  AND (
+    v.reconciliado_em IS NULL
+    OR v.reconciliado_em <= NOW() - ($1::bigint * INTERVAL '1 second')
+  )
 ORDER BY v.reconciliado_em NULLS FIRST, v.atualizado_em ASC
 LIMIT $2
 `, graceSec, limite)

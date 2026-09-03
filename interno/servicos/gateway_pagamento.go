@@ -26,17 +26,46 @@ type GatewayContext struct {
 	ERedeWebhookURL   string
 }
 
-// ResolverGatewayPagamento escolhe provedor, modo e credenciais.
+type postoRepoGateway interface {
+	BuscarPorIDNaRede(idPosto, idRede string) (*modelos.Posto, error)
+}
+
+// ResolverGatewayPagamento escolhe provedor, modo e credenciais (exige PIX habilitado para nova cobrança).
 func ResolverGatewayPagamento(
 	redeRepo repositorios.RedeRepositorio,
 	mpGW repositorios.MercadoPagoGatewayRepositorio,
 	eredeGW repositorios.ERedeGatewayRepositorio,
-	postoRepo interface {
-		BuscarPorIDNaRede(idPosto, idRede string) (*modelos.Posto, error)
-	},
+	postoRepo postoRepoGateway,
 	cfg config.Config,
 	idRede string,
 	idPostoRequisicao string,
+) (*GatewayContext, error) {
+	return resolverGatewayPagamento(redeRepo, mpGW, eredeGW, postoRepo, cfg, idRede, idPostoRequisicao, false)
+}
+
+// ResolverGatewayPagamentoConsulta credenciais para reconsultar cobrança já criada.
+// Não exige PIX ligado hoje (posto/rede pode ter desligado o meio após o pagamento).
+func ResolverGatewayPagamentoConsulta(
+	redeRepo repositorios.RedeRepositorio,
+	mpGW repositorios.MercadoPagoGatewayRepositorio,
+	eredeGW repositorios.ERedeGatewayRepositorio,
+	postoRepo postoRepoGateway,
+	cfg config.Config,
+	idRede string,
+	idPostoRequisicao string,
+) (*GatewayContext, error) {
+	return resolverGatewayPagamento(redeRepo, mpGW, eredeGW, postoRepo, cfg, idRede, idPostoRequisicao, true)
+}
+
+func resolverGatewayPagamento(
+	redeRepo repositorios.RedeRepositorio,
+	mpGW repositorios.MercadoPagoGatewayRepositorio,
+	eredeGW repositorios.ERedeGatewayRepositorio,
+	postoRepo postoRepoGateway,
+	cfg config.Config,
+	idRede string,
+	idPostoRequisicao string,
+	somenteConsulta bool,
 ) (*GatewayContext, error) {
 	idRede = strings.TrimSpace(idRede)
 	if idRede == "" {
@@ -65,11 +94,15 @@ func ResolverGatewayPagamento(
 		}
 		meios = modelos.IntersecaoMeios(rede.GatewayMeiosHabilitados, posto.GatewayMeiosHabilitados)
 	}
-	if !meios.Pix {
+	if !somenteConsulta && !meios.Pix {
 		if idPosto != "" {
 			return nil, errors.New("este posto nao aceita pagamento pix no momento")
 		}
 		return nil, errors.New("rede nao aceita pagamento pix no momento")
+	}
+	if somenteConsulta {
+		// Consulta não vende PIX; marca meio só para passar validações internas.
+		meios.Pix = true
 	}
 
 	out := &GatewayContext{

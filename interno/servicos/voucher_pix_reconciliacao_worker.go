@@ -86,6 +86,22 @@ func (s *ServicoVoucherCompra) ReconciliaVouchersPixAtivos(ctx context.Context) 
 	return consultados, estornados, erros
 }
 
+// errConsultaPixInexistente TID/pagamento não existe no provedor (ex.: e.Rede returnCode 78).
+// Não é estorno e não vale alerta operacional repetido — só marca e segue.
+func errConsultaPixInexistente(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	if strings.Contains(s, "transaction does not exist") {
+		return true
+	}
+	if strings.Contains(s, `"returncode":"78"`) || strings.Contains(s, "returncode\": \"78\"") {
+		return true
+	}
+	return strings.Contains(s, "consulta status 404") && strings.Contains(s, "78")
+}
+
 func (s *ServicoVoucherCompra) reconciliaUmVoucherPixAtivo(
 	ctx context.Context, vc *repositorios.VoucherCompraRegistro, agora time.Time,
 ) (estornou bool, err error) {
@@ -93,7 +109,7 @@ func (s *ServicoVoucherCompra) reconciliaUmVoucherPixAtivo(
 	if vc.PostoCompraID != nil {
 		idPosto = strings.TrimSpace(*vc.PostoCompraID)
 	}
-	gw, err := ResolverGatewayPagamento(s.rede, s.mpGW, s.eredeGW, s.posto, s.cfg, vc.RedeID, idPosto)
+	gw, err := ResolverGatewayPagamentoConsulta(s.rede, s.mpGW, s.eredeGW, s.posto, s.cfg, vc.RedeID, idPosto)
 	if err != nil {
 		return false, err
 	}
@@ -107,6 +123,16 @@ func (s *ServicoVoucherCompra) reconciliaUmVoucherPixAtivo(
 	}
 	pix, err := ConsultarPixVoucher(ctx, gw, provedor, tid, vc.MpPaymentID)
 	if err != nil {
+		if errConsultaPixInexistente(err) {
+			log.Printf(
+				"voucher_pix reconcilia: tid inexistente no provedor compra=%s — nao cancela: %v",
+				vc.ID, err,
+			)
+			if errM := s.repo.MarcarReconciliadoPix(vc.ID, vc.RedeID, agora); errM != nil {
+				log.Printf("voucher_pix reconcilia: marcar compra=%s: %v", vc.ID, errM)
+			}
+			return false, nil
+		}
 		return false, err
 	}
 	st := strings.TrimSpace(pix.Status)
