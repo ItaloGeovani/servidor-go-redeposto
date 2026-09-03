@@ -156,6 +156,8 @@ type VoucherCompraRepositorio interface {
 	ListarAtivosPixParaReconcilia(limite int, grace time.Duration) ([]*VoucherCompraRegistro, error)
 	// MarcarReconciliadoPix atualiza reconciliado_em sem alterar status.
 	MarcarReconciliadoPix(id, redeID string, em time.Time) error
+	// ExpirarAguardandoPagamentoVencidos marca AGUARDANDO_PAGAMENTO com prazo de PIX vencido como EXPIRADO.
+	ExpirarAguardandoPagamentoVencidos(limite int) (int64, error)
 }
 
 var ErrVoucherBaixaNaoPermitida = errors.New("baixa nao permitida neste estado do voucher")

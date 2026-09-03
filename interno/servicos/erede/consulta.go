@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -105,8 +106,13 @@ func ConsultarTransacaoPorTID(ctx context.Context, pv, clientSecret, ambiente, t
 	}
 	defer res.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	body := strings.TrimSpace(string(b))
+	log.Printf(
+		"e.rede consulta RESPONSE tid=%s ambiente=%s http=%d body=%s",
+		tid, strings.TrimSpace(ambiente), res.StatusCode, body,
+	)
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("e.rede consulta status %d: %s", res.StatusCode, strings.TrimSpace(string(b)))
+		return nil, fmt.Errorf("e.rede consulta status %d: %s", res.StatusCode, body)
 	}
 	var out transactionResponse
 	if err := json.Unmarshal(b, &out); err != nil {

@@ -29,6 +29,10 @@ func statusPixIndicaEstornoTotal(st string) bool {
 
 // ReconciliaVouchersPixAtivos reconsulta o provedor para vouchers ATIVO (PIX) e cancela se estornados.
 func (s *ServicoVoucherCompra) ReconciliaVouchersPixAtivos(ctx context.Context) (consultados, estornados, erros int) {
+	return s.reconciliaVouchersPixAtivos(ctx, false)
+}
+
+func (s *ServicoVoucherCompra) reconciliaVouchersPixAtivos(ctx context.Context, forcar bool) (consultados, estornados, erros int) {
 	if s == nil || s.repo == nil {
 		return 0, 0, 0
 	}
@@ -36,12 +40,23 @@ func (s *ServicoVoucherCompra) ReconciliaVouchersPixAtivos(ctx context.Context) 
 	defer log.Print("======= WORKER PIX RECONCILIA FINALIZADO ===========")
 
 	cfg := s.cfgPixReconcilia()
-	lista, err := s.repo.ListarAtivosPixParaReconcilia(cfg.lote, cfg.grace)
+	if nExp, errExp := s.repo.ExpirarAguardandoPagamentoVencidos(500); errExp != nil {
+		log.Printf("voucher_pix reconcilia: expirar aguardando: %v", errExp)
+	} else if nExp > 0 {
+		log.Printf("voucher_pix reconcilia: expirados AGUARDANDO_PAGAMENTO vencidos=%d", nExp)
+	}
+
+	grace := cfg.grace
+	if forcar {
+		grace = time.Second
+		log.Print("voucher_pix reconcilia: ciclo forçado pos-start (grace=1s) — loga RESPONSE e.Rede")
+	}
+	lista, err := s.repo.ListarAtivosPixParaReconcilia(cfg.lote, grace)
 	if err != nil {
 		log.Printf("voucher_pix reconcilia: listar: %v", err)
 		return 0, 0, 1
 	}
-	log.Printf("voucher_pix reconcilia: elegiveis=%d (lote=%d grace=%s)", len(lista), cfg.lote, cfg.grace)
+	log.Printf("voucher_pix reconcilia: elegiveis=%d (lote=%d grace=%s)", len(lista), cfg.lote, grace)
 	agora := time.Now()
 	for i, vc := range lista {
 		if vc == nil {
@@ -135,8 +150,8 @@ func (s *ServicoVoucherCompra) reconciliaUmVoucherPixAtivo(
 	if err != nil {
 		if errConsultaPixInexistente(err) {
 			log.Printf(
-				"voucher_pix reconcilia: tid inexistente no provedor compra=%s — nao cancela: %v",
-				vc.ID, err,
+				"voucher_pix reconcilia: tid inexistente no provedor compra=%s tid=%s ambiente=%s — nao cancela: %v",
+				vc.ID, tid, gw.ERedeAmbiente, err,
 			)
 			if errM := s.repo.MarcarReconciliadoPix(vc.ID, vc.RedeID, agora); errM != nil {
 				log.Printf("voucher_pix reconcilia: marcar compra=%s: %v", vc.ID, errM)
@@ -145,6 +160,10 @@ func (s *ServicoVoucherCompra) reconciliaUmVoucherPixAtivo(
 		}
 		return false, err
 	}
+	log.Printf(
+		"voucher_pix reconcilia: compra=%s tid=%s provedor=%s ambiente=%s status_mapeado=%s status_gateway=%q",
+		vc.ID, tid, provedor, gw.ERedeAmbiente, strings.TrimSpace(pix.Status), strings.TrimSpace(pix.GatewayStatusLabel),
+	)
 	st := strings.TrimSpace(pix.Status)
 	if statusPixIndicaEstornoTotal(st) {
 		s.ProcessarPagamentoEstornadoPorCompra(vc.RedeID, vc.ID, "reconcilia_"+strings.ToLower(st))
@@ -206,7 +225,7 @@ func (s *ServicoVoucherCompra) StartReconciliaPixWorker(ctx context.Context) {
 	case <-ctx.Done():
 		return
 	case <-timer.C:
-		s.ReconciliaVouchersPixAtivos(ctx)
+		s.reconciliaVouchersPixAtivos(ctx, true)
 	}
 	ticker := time.NewTicker(cfg.intervalo)
 	defer ticker.Stop()

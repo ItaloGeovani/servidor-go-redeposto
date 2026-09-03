@@ -1111,10 +1111,13 @@ func (r *voucherCompraPostgres) ListarAtivosPixParaReconcilia(limite int, grace 
 	if limite > 200 {
 		limite = 200
 	}
-	if grace < time.Minute {
-		grace = 15 * time.Minute
+	if grace <= 0 {
+		grace = time.Second
 	}
 	graceSec := int64(grace.Seconds())
+	if graceSec < 1 {
+		graceSec = 1
+	}
 	rows, err := r.db.QueryContext(ctx, `
 SELECT
   v.id::text,
@@ -1194,5 +1197,37 @@ SET reconciliado_em = $3,
 WHERE id = $1::uuid AND rede_id = $2::uuid
 `, strings.TrimSpace(id), strings.TrimSpace(redeID), em)
 	return err
+}
+
+func (r *voucherCompraPostgres) ExpirarAguardandoPagamentoVencidos(limite int) (int64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if limite < 1 {
+		limite = 200
+	}
+	if limite > 2000 {
+		limite = 2000
+	}
+	res, err := r.db.ExecContext(ctx, `
+WITH elegiveis AS (
+  SELECT id
+  FROM voucher_compras
+  WHERE status = 'AGUARDANDO_PAGAMENTO'
+    AND expira_pagamento_em IS NOT NULL
+    AND expira_pagamento_em < NOW()
+  ORDER BY expira_pagamento_em ASC
+  LIMIT $1
+  FOR UPDATE SKIP LOCKED
+)
+UPDATE voucher_compras v
+SET status = 'EXPIRADO',
+    atualizado_em = NOW()
+FROM elegiveis e
+WHERE v.id = e.id
+`, limite)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
